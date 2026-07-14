@@ -1,0 +1,14 @@
+#real loan terms, from guidelines
+
+fha: #for first time buyers
+  max_ltv: 0.965
+  min_down_payment_pct: 0.035
+  front_end_dti_max: 0.31
+  term_months: 360
+
+
+conventional: #for repeat buyers
+  max_ltv: 0.8
+  min_down_payment_pct: 0.2
+  front_end_dti_max: 0.28
+  term_months: 360

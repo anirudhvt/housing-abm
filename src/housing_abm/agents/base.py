@@ -2,8 +2,8 @@
 from mesa import Agent
 
 class HouseholdAgent(Agent):
-    def __init__(self, unique_id, model, income:float, age:int, tract_id: str):
-        super().__init__(unique_id, model)
+    def __init__(self, model, income:float, age:int, tract_id: str):
+        super().__init__(model)
         self.income = income
         self.age = age
         self.tract_id = tract_id

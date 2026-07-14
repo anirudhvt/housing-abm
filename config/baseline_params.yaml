@@ -1,0 +1,18 @@
+#placeholder parameters for initial test - run_calibration to see actual
+
+simulation:
+  n_households: 100 
+  
+
+wealth_eq1:
+  renter:
+    alpha: -30.0 #PLACEHOLDER
+    beta: 4.0 #PLACEHOLDER
+    epsilon_std: 0.3  #PLACEHOLDER
+  
+consumption_eq2:
+  alpha: 0.5 #PLACEHOLDER
+
+household_budget:
+  #netted out before considering disposable income
+  essential_consumption_monthly: 1215 #estimated from 2026 poverty line

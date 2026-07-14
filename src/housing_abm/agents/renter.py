@@ -4,8 +4,8 @@ from .base import HouseholdAgent
 
 
 class Renter(HouseholdAgent):
-    def __init__(self, unique_id, model, income, age, tract_id, rent_burden_exit_threshold: float = 0.30):
-        super().__init__(unique_id, model, income, age, tract_id)
+    def __init__(self, model, income, age, tract_id, rent_burden_exit_threshold: float = 0.30):
+        super().__init__( model, income, age, tract_id)
         self.rent_burden_exit_threshold = rent_burden_exit_threshold
         self.status = "renting"
 
