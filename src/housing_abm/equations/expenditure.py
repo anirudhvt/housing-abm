@@ -24,4 +24,19 @@ def desired_expenditure(income_or_capital: float, g:float, alpha:float,
 
 
 def price_appreciation_expectation(hpi_history: list[float], alpha:float) -> float:
-    """EQ 4: g_t = alpha*[(h_t-1+h_t-2+h_t-3)/(h_t-13+h_t-14+h_t-15)-1]."""
+    """EQ 4: g_t = alpha*[(h_t-1+h_t-2+h_t-3)/(h_t-13+h_t-14+h_t-15)-1].
+    
+    hpi_history must contain 15 months of tract_level house price index values
+    most recent is the last
+    compute per census tract using assessor/ZHVI data
+    """
+    if len(hpi_history) < 15:
+        raise ValueError("hpi_history must contain at least 15 values")
+    h_t_minus_1 = hpi_history[-1]
+    h_t_minus_2 = hpi_history[-2]
+    h_t_minus_3 = hpi_history[-3]
+    h_t_minus_13 = hpi_history[-13]
+    h_t_minus_14 = hpi_history[-14]
+    h_t_minus_15 = hpi_history[-15]
+    g_t = alpha * ((h_t_minus_1 + h_t_minus_2 + h_t_minus_3) / (h_t_minus_13 + h_t_minus_14 + h_t_minus_15) - 1)
+    return g_t
