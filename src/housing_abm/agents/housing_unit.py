@@ -2,8 +2,8 @@
 from mesa import Agent
 
 class HousingUnit(Agent):
-    def __init__(self, unique_id, model, tract_id: str, quality:float):
-        super().__init__(unique_id, model)
+    def __init__(self, model, tract_id: str, quality:float):
+        super().__init__(model)
         self.tract_id = tract_id
         self.quality = quality
         self.owner = None    #owning agent

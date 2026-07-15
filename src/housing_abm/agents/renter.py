@@ -4,10 +4,13 @@ from .base import HouseholdAgent
 
 
 class Renter(HouseholdAgent):
+
+    WEALTH_KEY = 'renter'
+
     def __init__(self, model, income, age, tract_id, rent_burden_exit_threshold: float = 0.30):
         super().__init__( model, income, age, tract_id)
         self.rent_burden_exit_threshold = rent_burden_exit_threshold
-        self.status = "renting"
+        #self.status = "renting" status starts at social housing, turns into renter when run_rental_market assigns house
         self.lease_months_remaining = 0
 
 
@@ -32,6 +35,8 @@ class Renter(HouseholdAgent):
             
             #otherwise, lease has ended, returning to social housing
             self.house.tenant = None
+            self.house.on_rental_market = True #relist house
+
             self.house = None
             self.status = "social_housing"
         

@@ -5,6 +5,7 @@ from mesa import Model
 from mesa.datacollection import DataCollector
 
 from housing_abm.agents.renter import Renter
+from housing_abm.markets.rental_market import generate_placeholder_rental_stock, run_rental_market
 
 class AtlantaHousingModel(Model):
     def __init__(self, config_path: str = "config/baseline_params.yaml",
@@ -29,6 +30,13 @@ class AtlantaHousingModel(Model):
         self.mortgage_terms = {"fha": {}, "conventional" : {}, "investor_dscr": {}}
         with open("config/mortgage_terms.yaml") as f:
             self.mortgage_terms = yaml.safe_load(f)
+
+
+        #queue of renters in social housing looking to rent again
+        #-queue housing decision(), drained by run_rental_market() in step()
+
+        self._rental_bid_queue = []
+
         
         self.datacollector = DataCollector( #placeholder data collector 
             model_reporters = { #model level data
@@ -48,13 +56,20 @@ class AtlantaHousingModel(Model):
             age = int(self.random_gen.integers(22,65))
             Renter(model=self, income = income, age = age, tract_id="tract_001") #default initialization
 
+        
+        #placholder exogenous rental stock 
+        self.rental_units = generate_placeholder_rental_stock(self)
+
     def step(self):
         self.current_month += 1
         #TODO: implement remaining phases of monthly cycle
         #construction, market clearing, policy updates
-        #schedule.step currently only runs each agent's step 
+        #shuffle_do currently only runs each agent's step 
         #for renter just does consumption without market
         self.agents.shuffle_do("step")
+        #match queued renters against vacant rental stock
+        run_rental_market(self)
+
         self.datacollector.collect(self)
 
 
@@ -63,7 +78,7 @@ class AtlantaHousingModel(Model):
         return sum(1 for agent in self.agents if getattr(agent, "status", None) == "renting") #checks status attritbute for renters
 
     def _mean_bank_balance(self):
-        balances = [agent.bank_balance for agent in self.agents]
+        balances = [agent.bank_balance for agent in self.agents if hasattr(agent, "bank_balance")]#only applies to household agents
         return float(np.mean(balances)) if balances else 0 #if balances exist, return mean as float
     
     #stubs for market clearing
@@ -75,7 +90,9 @@ class AtlantaHousingModel(Model):
         raise NotImplementedError
     
     def _rental_vacancy_rate(self):
-        raise NotImplementedError
+        vacant = sum(1 for unit in self.rental_units if unit.tenant is None and unit.on_rental_market)
+        total = len(self.rental_units)
+        return vacant / total if self.rental_units else 0.0
 
     def _median_rent(self):
         raise NotImplementedError
@@ -85,9 +102,19 @@ class AtlantaHousingModel(Model):
     
 
     #placeholder hooks
-    def queue_housing_decision(self,agent): #mark and queue an agent for the housing-market process
-        pass #TODO
+    def queue_housing_decision(self,agent):
+         #mark and queue an agent for the housing-market process
+        if agent not in self._rental_bid_queue:
+            self._rental_bid_queue.append(agent)
 
     def exit_tract(self, agent): #remove agent from schedule 
-        pass #TODO
+        #occurs if rent burden became high or they moved away
+        #vacate unit if exists, then remove from market
+        if agent.house is not None:
+            agent.house.tenant = None
+            agent.house.on_rental_market = True
+            agent.house = None
+        if agent in self._rental_bid_queue:
+            self._rental_bid_queue.remove(agent)
+        agent.remove()
 

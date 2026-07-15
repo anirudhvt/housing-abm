@@ -66,7 +66,7 @@ class FirstTimeBuyer(HouseholdAgent):
         #now, weigh owning vs renting via equation 5
 
         buy_params = self.model.params["buy_rent_eq5"]
-        prob = p_buy(rent_q = rent_q, tau = buy_params["tau"], beta = buy_params["beta"], rent_income_fraction = buy_params["rent_income_fraction"],
+        prob = p_buy(rent_q = rent_q, tau = buy_params["tau"], rent_income_fraction = buy_params["rent_income_fraction"],
                      monthly_mortgage = monthly_mortgage, price=price, g=g,
                      beta = buy_params["beta"])
 

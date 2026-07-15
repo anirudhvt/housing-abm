@@ -11,7 +11,7 @@ class HouseholdAgent(Agent):
         self.tract_id = tract_id
         self.bank_balance = 0.0
         self.desired_balance = 0.0 #eq 1, updated periodically
-        self.status = "social housing" # or renting or owning
+        self.status = "social_housing" # or renting or owning
         self.house = None #reference to HousingUnit, if existing
 
     def refresh_desired_balance(self):
@@ -19,7 +19,7 @@ class HouseholdAgent(Agent):
         income - wealth relationship stays fixed per agent type"""
 
         #grabbing relevant parameters from the passed file
-        params = self.model.params["wealth_eq1"][self.WEALTH.KEY]
+        params = self.model.params["wealth_eq1"][self.WEALTH_KEY]
         self.desired_balance = desired_bank_balance(
             income=self.income, alpha = params["alpha"], 
             beta = params["beta"], epsilon_std = params["epsilon_std"],
