@@ -81,15 +81,6 @@ class AtlantaHousingModel(Model):
         #for renter just does consumption without market
         self.agents.shuffle_do("step")
         #match queued renters against vacant rental stock
-        print("Ownership bids:", len(self._ownership_bid_queue))
-        print("Rental bids:", len(self._rental_bid_queue))
-
-        print(
-        "Renters:",
-        sum(isinstance(a, Renter) for a in self.agents),
-        "FTBs:",
-        sum(isinstance(a, FirstTimeBuyer) for a in self.agents),
-        )
 
         run_ownership_market(self) #buyers get first chance
 
@@ -171,6 +162,7 @@ class AtlantaHousingModel(Model):
         agent.remove()
 
     def queue_rental_bid(self, agent, fraction_of_income: float = 0.33):
+        agent.rent_affordability_fraction = fraction_of_income #how much of their income do they bid for rent
         self.queue_housing_decision(agent)
     
     def queue_ownership_bid(self, agent, max_price: float, down_payment: float): #creates a bid

@@ -1,4 +1,4 @@
-"""Placeholder ownership market, first come first serve matching
+"""Placeholder ownership market, one round bidding
 TODO: replace with multi-round matching"""
 
 
@@ -18,18 +18,22 @@ def generate_placeholder_sale_stock(model, n_units: int = 100, base_price: float
 def run_ownership_market(model):
     """Matches queued buyers to houses whose prices they can afford (max_price)"""
     for_sale = [u for u in model.for_sale_units if u.on_sale_market and u.owner is None]
+    if not for_sale or not model._ownership_bid_queue: #no houses or no prospective buyers
+        return
+    
     model.random_gen.shuffle(for_sale)
 
-    matched = []
-    for bid in model._ownership_bid_queue:
-        agent, max_price, down_payment = bid["agent"], bid["max_price"], bid["down_payment"]
-        affordable = [u for u in for_sale if u.price <= max_price]
-        if not affordable: #asking price is too high for each house
-            model.queue_rental_bid(bid["agent"])
-            matched.append(bid)
-            continue
-        unit = affordable[0] #otherwise, select the first affordable unit
-        for_sale.remove(unit)
+    matched_bids = []
+
+
+    for unit in for_sale:
+        eligibile = [bid for bid in model._ownership_bid_queue 
+                     if bid["max_price"] >= unit.price and bid not in matched_bids]
+        if not eligibile:
+            continue #no one can afford
+
+        winning_bid = max(eligibile, key = lambda b: b["max_price"])
+        agent, down_payment = winning_bid["agent"], winning_bid["down_payment"]
 
         
         #assign characteristics of the bought house according to the bid/loan terms
@@ -38,14 +42,19 @@ def run_ownership_market(model):
         term_months = model.mortgage_terms[agent.LOAN_TYPE]["term_months"]
         unit.mortgage_principal = principal
         unit.mortgage_payment = model.monthly_payment(principal, i_r_monthly, term_months)
-        #agent buys the house
+        #winning agent buys the house
 
         unit.owner = agent
         unit.on_sale_market = False
         agent.bank_balance -= down_payment
         agent.house = unit
         agent.status = "owning"
-        matched.append(bid)
+        matched_bids.append(winning_bid)
 
-    for bid in matched:
+    #unmatched bidders go back to rental market
+    unmatched = [bid for bid in model._ownership_bid_queue if bid not in matched_bids]
+    for bid in unmatched:
+        model.queue_rental_bid(bid["agent"])
+
+    for bid in matched_bids + unmatched:
         model._ownership_bid_queue.remove(bid)

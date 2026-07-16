@@ -36,9 +36,15 @@ class FirstTimeBuyer(HouseholdAgent):
             self.house.on_rental_market = True
             self.house = None
             self.status = "social_housing"
+            self._evaluate_buy_or_rent() #redecide what to do now
             return #next month's step() should return rent vs buy logic below
 
         self.apply_consumption(housing_cost = 0)
+        self._evaluate_buy_or_rent()
+
+    def _evaluate_buy_or_rent(self):
+        """EQ 3 + EQ 5 + EQ 17
+        assumes consumption already applied"""
 
         #grab information
         tract = self.model.tracts[self.tract_id]
