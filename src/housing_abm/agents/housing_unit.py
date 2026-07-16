@@ -15,3 +15,9 @@ class HousingUnit(Agent):
         self.on_sale_market = False
         self.on_rental_market = False
         self.mortgage_principal = 0.0
+        self.mortgage_payment = 0.0
+
+    def step(self):
+        pass
+
+

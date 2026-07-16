@@ -18,12 +18,26 @@ class FirstTimeBuyer(HouseholdAgent):
         #EQ 5: buy vs rent, EQ 17 down payment, place bid on ownership makret
 
         self.refresh_desired_balance()
-        if self.house is not None: #same as renter
+        if self.house is not None and self.status == "owning": #same as renter
             monthly_payment = self.house.mortgage_payment
             self.apply_consumption(housing_cost = monthly_payment)
             return #already owns, selling handled by repeatbuyer logic
                    #newly owning ftbs don't relist immediately
         
+        if self.house is not None and self.status == "renting":
+            #still saving to buy, meanwhile renting
+            #revaluate buy vs rent once lease ends
+            monthly_rent = self.house.rent
+            self.apply_consumption(housing_cost = monthly_rent)
+            self.lease_months_remaining -= 1
+            if self.lease_months_remaining >0:
+                return
+            self.house.tenant = None
+            self.house.on_rental_market = True
+            self.house = None
+            self.status = "social_housing"
+            return #next month's step() should return rent vs buy logic below
+
         self.apply_consumption(housing_cost = 0)
 
         #grab information
@@ -60,13 +74,15 @@ class FirstTimeBuyer(HouseholdAgent):
         
         #what quality house can they afford
         quality = self.model.quality_affordable(price, self.tract_id)
-        rent_q = self.model.market_rent_for_quality(quality, self.tract_id)
-        monthly_mortgage = self.model.monthly_payment(loan_cap, i_r_monthly, mort_cfg["term_months"])
+        rent_q_monthly = self.model.market_rent_for_quality(quality, self.tract_id)
+        estimated_down_payment = mort_cfg["min_down_payment_pct"] * price #calculate estimated down payment given loan rules for first time ubyers
+        estimated_loan = price - estimated_down_payment
+        monthly_mortgage = self.model.monthly_payment(estimated_loan, i_r_monthly, mort_cfg["term_months"]) #calculate mortgage based on loan, interest, and term length
 
         #now, weigh owning vs renting via equation 5
 
         buy_params = self.model.params["buy_rent_eq5"]
-        prob = p_buy(rent_q = rent_q, tau = buy_params["tau"], rent_income_fraction = buy_params["rent_income_fraction"],
+        prob = p_buy(rent_q = rent_q_monthly * 12, tau = buy_params["tau"], 
                      monthly_mortgage = monthly_mortgage, price=price, g=g,
                      beta = buy_params["beta"])
 
@@ -75,8 +91,8 @@ class FirstTimeBuyer(HouseholdAgent):
             income_cutoff = self.model.ftb_income_cutoff(down_cfg["floor_share_p_floor"])
             down_payment = down_payment_owner(
                 price = price, income_rank = self.income, income_cutoff=income_cutoff,
-                d_minimum_pct = down_cfg["d_minimum_pct"], lognormal_m = down_cfg["lognormal_m"],
-                lognormal_s = down_cfg["lognormal_s"], rng=self.model.random_gen)
+                d_minimum_pct = down_cfg["d_minimum_pct"], lognorm_m = down_cfg["lognorm_m"],
+                lognorm_s = down_cfg["lognorm_s"], rng=self.model.random_gen)
             self.model.queue_ownership_bid(self, max_price = price, down_payment = down_payment) #enters housing market
         else: #chooses to rent
             self.model.queue_rental_bid(self, fraction_of_income = 0.33) 

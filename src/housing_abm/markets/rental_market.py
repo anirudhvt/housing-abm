@@ -4,7 +4,7 @@ from housing_abm.agents.housing_unit import HousingUnit
 from housing_abm.equations.rental_pricing import small_landlord_rent
 
 
-def generate_placeholder_rental_stock(model, n_units: int = 50, base_rent: float = 1400.0): #if not given, provides default values
+def generate_placeholder_rental_stock(model, n_units: int = 150, base_rent: float = 1400.0): #if not given, provides default values
     "Creates fixed rental stock for skeleton market"
     #TODO: replace with tract-based generation 
 

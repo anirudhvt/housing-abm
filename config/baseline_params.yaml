@@ -18,18 +18,18 @@ consumption_eq2:
   alpha: 0.5 
 
 expenditure_eq3:
-  alpha_household: 4.15
+  alpha_household: 4.5
   alpha_institutional: 5.5
-  beta: 0.08
-  epsilon_std: 0.5
+  beta: 0.3
+  epsilon_std: 0.15
 
 appreciation_eq4:
-  alpha_household: 0.5
+  alpha_household: 1.0
   alpha_institutional: 0.8
 
 buy_rent_eq5:
-  beta: 0.00029
-  tau: 0.0917
+  beta: 0.002
+  tau: 0.1
   rent_income_fraction: 0.33
 
 mortgage_eq14:
@@ -47,12 +47,14 @@ downpayment_eq17:
   first_time_buyer:
     d_minimum_pct: 0.035
     floor_share_p_floor: 0.55
-    lognormal_m: 10.3
-    lognormal_s: 0.9
+    lognorm_m: -1.6
+    lognorm_s: 0.5
   repeat_buyer: 
     d_minimum_pct: 0.2
-    lognormal_m: 10.3
-    lognormal_s: 0.75
+    lognorm_m: 10.3
+    lognorm_s: 0.75
+
+
 
 household_budget:
   #netted out before considering disposable income

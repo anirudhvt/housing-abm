@@ -39,6 +39,9 @@ class Renter(HouseholdAgent):
 
             self.house = None
             self.status = "social_housing"
+        else:#not housed yet
+            self.apply_consumption(housing_cost = 0) #no housing cost if not housed
+
         
         if self.status == "social_housing":
             #check if enough savings for downpayment on affordable house

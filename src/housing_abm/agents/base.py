@@ -10,7 +10,7 @@ class HouseholdAgent(Agent):
         self.age = age
         self.tract_id = tract_id
         self.bank_balance = 0.0
-        self.desired_balance = 0.0 #eq 1, updated periodically
+        self.desired_balance = desired_bank_balance(income=self.income, alpha=-30.0, beta= 4.0, epsilon_std=0.3, rng=self.model.random_gen) #eq 1, updated periodically
         self.status = "social_housing" # or renting or owning
         self.house = None #reference to HousingUnit, if existing
 
