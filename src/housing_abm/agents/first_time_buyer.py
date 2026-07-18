@@ -19,10 +19,14 @@ class FirstTimeBuyer(HouseholdAgent):
 
         self.refresh_desired_balance()
         if self.house is not None and self.status == "owning": #same as renter
+            min_tenure_= self.model.params["repeat_buyer_promotion"]["min_tenure_months"]
+            months_owned = self.model.current_month - self.owned_since_month
             monthly_payment = self.house.mortgage_payment
             self.apply_consumption(housing_cost = monthly_payment)
+            if months_owned >= min_tenure_: #promote to repeat buyer
+                self.model._promote_to_repeat_buyer(self)
             return #already owns, selling handled by repeatbuyer logic
-                   #newly owning ftbs don't relist immediately
+                    #newly owning ftbs don't relist immediately
         
         if self.house is not None and self.status == "renting":
             #still saving to buy, meanwhile renting
@@ -68,7 +72,7 @@ class FirstTimeBuyer(HouseholdAgent):
     
         exp_params = self.model.params["expenditure_eq3"]
         price = desired_expenditure(
-            income_or_capital = self.income, g=g, alpha=exp_params["alpha_household"], 
+            income_or_capital = self.income*12, g=g, alpha=exp_params["alpha_household"],  #convert income to yearly
             beta=exp_params["beta"], epsilon_std=exp_params["epsilon_std"], 
             rng=self.model.random_gen, mortgage_cap = max_affordable_price)
         

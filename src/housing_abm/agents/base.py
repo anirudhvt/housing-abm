@@ -13,6 +13,9 @@ class HouseholdAgent(Agent):
         self.desired_balance = desired_bank_balance(income=self.income, alpha=-30.0, beta= 4.0, epsilon_std=0.3, rng=self.model.random_gen) #eq 1, updated periodically
         self.status = "social_housing" # or renting or owning
         self.house = None #reference to HousingUnit, if existing
+        self.owned_since_month = None #month they became an owner, for repeat buyers
+        self.bridge_loan = 0.0 #down payment financed against unrealized equity, repaid when old house is sold
+
 
     def refresh_desired_balance(self):
         """EQ 1: re-drawn each step - noise varies over time, "
@@ -29,6 +32,21 @@ class HouseholdAgent(Agent):
     def apply_consumption(self, housing_cost: float):
         """EQ 2: rent/mortgage netted out before consumption"""
         alpha = self.model.params["consumption_eq2"]["alpha"]
+        if housing_cost is None:
+            print(
+                self.__class__.__name__,
+                self.status,
+                self.house,
+                housing_cost
+            )
+            raise ValueError(
+                f"housing_cost is None for {self.__class__.__name__}, "
+                f"house={self.house}"
+                f"cost = {housing_cost}"
+                f"status = {self.status}"
+            )
+        
+
         #available money
         net_inflow = self.bank_balance + self.income - housing_cost
         #use eq 2 from the equations folder

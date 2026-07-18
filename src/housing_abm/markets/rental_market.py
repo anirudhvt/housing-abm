@@ -55,10 +55,11 @@ def run_rental_market(model):
         winner.status = "renting"
         lease_length = sample_lease_length(model.random_gen)
         #to avoid leases lining up, on the first step of the model we give agents a varied head start
-        if model.current_month <= 1:
-            lease_length = int(model.random_gen.integers(1, lease_length+1)) #randomly start somewhere in the lease
+        if getattr(winner, "_ever_leased", False): #randomly start somewhere in the lease
+            lease_length = int(model.random_gen.integers(1, lease_length+1))
+        winner._ever_leased = True #flag so we don't do this again
         winner.lease_months_remaining = lease_length
-        
+
         matched_agents.append(winner) #done looking for a house
 
 

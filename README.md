@@ -25,5 +25,5 @@ Now, to reproduce the baseline, run
 ```bash
 python scripts/run_baseline.py
 ```
-This creates a model with `N_HOUSEHOLDS = 100` households and a fixed `SEED = 42`, steps it forward over `N_MONTHS = 36` months, and writes `baseline_run.png` (renting/vacancy rate/owning over time) to the project root. Edit constants at the top of the script to change household count, seed, or run length in months. 
+This creates a model with `N_HOUSEHOLDS = 100` households and a fixed `SEED = 42`, steps it forward over `N_MONTHS = 36` months, and writes `baseline_run.png` (renting/vacancy rate/owning over time) to the project root. Edit constants at the top of the script to change household count, seed, or run length in months. This may take a minute, depending on the number of households and time in months, so take a stretch break if needed. 
 
