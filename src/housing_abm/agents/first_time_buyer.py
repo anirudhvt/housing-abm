@@ -53,7 +53,7 @@ class FirstTimeBuyer(HouseholdAgent):
         #grab information
         tract = self.model.tracts[self.tract_id]
         mort_cfg = self.model.mortgage_terms[self.LOAN_TYPE] #fha loan terms
-        i_r_monthly = self.model.current_fed_rate_monthly
+        i_r_monthly = self.model.mortgage_rate_monthly
 
         loan_cap = max_loan_owner_occupier(
             bank_balance = self.bank_balance,
@@ -103,6 +103,8 @@ class FirstTimeBuyer(HouseholdAgent):
                 price = price, income_rank = self.income, income_cutoff=income_cutoff,
                 d_minimum_pct = down_cfg["d_minimum_pct"], lognorm_m = down_cfg["lognorm_m"],
                 lognorm_s = down_cfg["lognorm_s"], rng=self.model.random_gen)
+
+            down_payment = min(down_payment, self.bank_balance, price) #can't pay more than you have or more than the price of the house
             self.model.queue_ownership_bid(self, max_price = price, down_payment = down_payment) #enters housing market
         else: #chooses to rent
             self.model.queue_rental_bid(self, fraction_of_income = 0.33) 

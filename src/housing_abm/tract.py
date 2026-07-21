@@ -32,4 +32,8 @@ class Tract:
             return 30.0 #default placeholder
         return sum(self.recent_days_on_market) / len(self.recent_days_on_market) #average
     
-    
+    def gross_rental_yield(self) -> float:
+        """r_bar for EQ 9/12: annualized gross rent/price, per quality"""
+        if self.price_per_quality <= 0:
+            return 0.0
+        return (self.rent_per_quality * 12 ) / self.price_per_quality 

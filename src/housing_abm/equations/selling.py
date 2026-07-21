@@ -16,7 +16,7 @@ def p_sell(tenure_years: float, n_h: float, n_h_avg: float,
     """
     base = 1 + alpha * (n_h_avg - n_h) + beta * (i_avg - i_current)
     if i_mortgage is not None:
-        base += gamma * (i_current - i_mortgage)
+        base -= gamma * (i_current - i_mortgage) #having a good mortgage currently reduces chance of buying
     return 1/12 * max((1/tenure_years) * base, 0.0)
 
 def asking_price(p_bar_tract:float, f_bar_tract:float, alpha:float, 
@@ -33,7 +33,7 @@ def asking_price(p_bar_tract:float, f_bar_tract:float, alpha:float,
     ln_ps = alpha + np.log(p_bar_tract) - beta * np.log(zeta * (1 + f_bar_tract)) + epsilon
     return np.exp(ln_ps)
 
-def price_reduction(current_price: float, reduction_prob: float,epsilon_mean: float, 
+def price_reduction(current_price: float, reduction_prob: float, 
                     epsilon_std:float, rng: np.random.Generator,
                     vacancy_tax_multiplier: float = 1.0) -> float:
     
@@ -41,8 +41,9 @@ def price_reduction(current_price: float, reduction_prob: float,epsilon_mean: fl
     vacancy_tax_multiplier > 1: increases reduction probability for investor held units"""
 
     prob = min(reduction_prob * vacancy_tax_multiplier, 1.0)
-    if rng.random() < prob:
-        epsilon = rng.normal(epsilon_mean, epsilon_std)
-        reduction_fraction = np.exp(epsilon)/100
-        return current_price * (1 - reduction_fraction)
+    if rng.random() < prob: #chooses to reduce price
+        #have to force epsilon <= 0
+        epsilon = -abs(rng.normal(0, epsilon_std))
+        reduction_fraction = np.exp(epsilon)
+        return max(current_price * (1 - reduction_fraction), 0)
     return current_price

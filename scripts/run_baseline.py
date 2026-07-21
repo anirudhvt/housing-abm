@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from housing_abm.model import AtlantaHousingModel
 
 N_MONTHS = 100
-N_HOUSEHOLDS = 100
+N_HOUSEHOLDS = 300
 SEED = 42
 
 model = AtlantaHousingModel(n_households=N_HOUSEHOLDS, seed=SEED)
@@ -33,9 +33,7 @@ axes[2].set_ylabel("# households owning")
 axes[2].set_title(f"Owner population over time (n={N_HOUSEHOLDS} households, seed={SEED})")
 axes[2].grid(alpha=0.3)
 
-axes[3].plot(df.index, df["mean_bank_balance"], color="#2b6cb0")
-axes[3].set_ylabel("Mean bank balance")
-axes[3].set_title(f"Mean bank balance over time (n={N_HOUSEHOLDS} households, seed={SEED})")
+axes[3].plot(df.index, df["n_social_housing"], color="#2b6cb0")
 axes[3].grid(alpha=0.3)
 
 

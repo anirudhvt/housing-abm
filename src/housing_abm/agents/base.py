@@ -52,6 +52,7 @@ class HouseholdAgent(Agent):
         #use eq 2 from the equations folder
         consumption = monthly_consumption(net_inflow, self.desired_balance, alpha)
         self.bank_balance = net_inflow - consumption #update bank balance
+        self.model.prevent_bankruptcy(self) #inject cash
         return consumption
     
     def essential_consumption(self) -> float:

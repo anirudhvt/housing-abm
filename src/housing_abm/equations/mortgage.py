@@ -39,7 +39,7 @@ def passes_investor_dscr(bank_balance: float, expected_annual_rent_yield: float,
 
     """
 
-    icr_bound = bank_balance/(1-expected_annual_rent_yield/(xi_icr*i_btl_monthly))
+    icr_bound = bank_balance/(1-expected_annual_rent_yield/(xi_icr*i_btl_monthly*12))
     passes_icr = proposed_loan <= icr_bound
     passes_ltv = proposed_loan <= bank_balance * chi_max_ltv / (1 - chi_max_ltv)
     return passes_icr and passes_ltv

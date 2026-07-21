@@ -2,6 +2,7 @@
 
 from housing_abm.agents.housing_unit import HousingUnit
 from housing_abm.equations.rental_pricing import sample_lease_length, small_landlord_rent
+from housing_abm.equations.market_matching import sample_bid_up_multiplier, max_rounds
 
 
 def generate_placeholder_rental_stock(model, n_units: int = 150, base_rent: float = 1400.0): #if not given, provides default values
@@ -21,10 +22,23 @@ def generate_placeholder_rental_stock(model, n_units: int = 150, base_rent: floa
         units.append(unit)
     return units
 
+
+def _settle_lease(model, unit, winner, final_rent):
+    """Assign house to winner and start a lease"""
+    unit.rent = final_rent
+    unit.tenant = winner
+    unit.on_rental_market = False
+    winner.house = unit
+    winner.status = "renting"
+    lease_length = sample_lease_length(model.random_gen)
+    #to avoid leases lining up, on the first step of the model we give agents a varied head start
+    if getattr(winner, "_ever_leased", False): #randomly start somewhere in the lease
+        lease_length = int(model.random_gen.integers(1, lease_length + 1))
+    winner._ever_leased = True #flag so we don't do this again
+    winner.lease_months_remaining = lease_length
+
 def run_rental_market(model):
-    """Matches queued renters against vacant units
-    single-round bidding, price stays static
-    TODO: multi-round bid convergence"""
+    """Multi round double auction clearing of queued renters"""
     vacant_units = [unit for unit in model.rental_units if unit.on_rental_market and unit.tenant is None]
     if not vacant_units or not model._rental_bid_queue: #no houses or no renters
         return
@@ -37,34 +51,68 @@ def run_rental_market(model):
         fraction = getattr(agent, "rent_affordability_fraction", 0.33)
         bids[agent] = fraction*agent.income #raw amount of money bid
 
-    model.random_gen.shuffle(vacant_units)
+    auction_cfg = model.params["market_clearing_a4"]
+    #see the agents and houses on the market
+    remaining_agents = list(model._rental_bid_queue)
+    remaining_units = list(vacant_units)
+
+    n_rounds = max_rounds(
+        n_bids = len(remaining_agents), n_offers = len(remaining_units),
+        n_households = len(model.agents), round_floor = auction_cfg["round_floor"]
+    )
+
     matched_agents = []
 
-    for unit in vacant_units: #loop through houses and find highest bidder
-        eligible = [(agent, bid) for agent, bid in bids.items() #all bidders who can afford and want this house
-                     if bid >= unit.rent and agent not in matched_agents]
-        if not eligible:
-            continue #no one eligible, unit stays unmatched
+    for _round in range(n_rounds):
+        if not remaining_agents or not remaining_units: #bidders or houses ran out
+            break
 
-        winner, winning_bid = max(eligible, key = lambda pair: pair[1]) 
+        #phase 1: remaining renters claim best quality unit they can afford
+        claims = {} #unit -> list of agents
+        for agent in remaining_agents: 
+            affordable = [u for u in remaining_units if bids[agent] >= u.rent]
+            if not affordable: #nothing on the market is cheap enough
+                continue
+            best_unit = max(affordable, key=lambda u: u.quality) 
+            claims.setdefault(best_unit, []).append(agent)
 
-        #assign house to winner
-        unit.tenant = winner
-        unit.on_rental_market = False
-        winner.house = unit
-        winner.status = "renting"
-        lease_length = sample_lease_length(model.random_gen)
-        #to avoid leases lining up, on the first step of the model we give agents a varied head start
-        if getattr(winner, "_ever_leased", False): #randomly start somewhere in the lease
-            lease_length = int(model.random_gen.integers(1, lease_length+1))
-        winner._ever_leased = True #flag so we don't do this again
-        winner.lease_months_remaining = lease_length
+        if not claims:
+            break #no one can afford anythnig
 
-        matched_agents.append(winner) #done looking for a house
+        #Phase 2: resolve each claimed unit
+        leased_units = []
+        for unit, claimants in claims.items():
+            if len(claimants) == 1: #only 1 person wants that house
+                winner = claimants[0]
+                final_rent = unit.rent
+            else:  #bid up to settle ties
+                multiplier = sample_bid_up_multiplier(
+                    model.random_gen, n_bids = len(claimants),
+                    bid_up_pct = auction_cfg["bid_up_pct"],
+                    arrival_window_days = auction_cfg["arrival_window_days"],
+                    month_days = auction_cfg["month_days"],
+                    max_multiplier = auction_cfg["max_multiplier"],
+                )
+                bid_up_rent = unit.rent * multiplier 
+                still_afford = [a for a in claimants if bids[a] >= bid_up_rent] #agents who can still afford the house
+                if not still_afford:
+                    continue #priced everyone out, try again later
+                winner = model.random_gen.choice(still_afford) #choose a random person to get the house
+                final_rent = bid_up_rent
+            #assign winner their house
+            _settle_lease(model, unit, winner, final_rent) 
+            matched_agents.append(winner)
+            leased_units.append(unit)
+
+        remaining_agents = [a for a in remaining_agents if a not in matched_agents]
+        remaining_units = [u for u in remaining_units if u not in leased_units]
+
+        #unmatched bidders resubmit next month
+        model._rental_bid_queue = [] #clear queue to prevent carryover issues
 
 
-    for agent in matched_agents:
-        model._rental_bid_queue.remove(agent)
+
+    
         
 
 

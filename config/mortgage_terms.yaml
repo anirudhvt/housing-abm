@@ -12,3 +12,8 @@ conventional: #for repeat buyers
   min_down_payment_pct: 0.2
   front_end_dti_max: 0.28
   term_months: 360
+
+investor_dscr: #for small landlords / institutional investors
+  max_ltv: 0.75
+  min_down_payment_pct: 0.25
+  term_months: 360
