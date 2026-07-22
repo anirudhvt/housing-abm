@@ -1,9 +1,19 @@
 """EQ 6: sell probability, EQ 7: asking price, EQ 8: price reduction"""
+
 import numpy as np
 
-def p_sell(tenure_years: float, n_h: float, n_h_avg: float,
-           i_current: float, i_avg: float, alpha: float, beta: float,
-           i_mortgage: float | None = None, gamma: float = 0.0) -> float:
+
+def p_sell(
+    tenure_years: float,
+    n_h: float,
+    n_h_avg: float,
+    i_current: float,
+    i_avg: float,
+    alpha: float,
+    beta: float,
+    i_mortgage: float | None = None,
+    gamma: float = 0.0,
+) -> float:
     """EQ 6: P(sell) = 1/12 * max(1/tenure years (1 + alpha(n_h_avg - n_h)
     +beta(i_avg - i_current)),0)
     adapted term: 'golden handcuffs' lock-in effect: gamma(i_current - i_mortgage)
@@ -16,33 +26,49 @@ def p_sell(tenure_years: float, n_h: float, n_h_avg: float,
     """
     base = 1 + alpha * (n_h_avg - n_h) + beta * (i_avg - i_current)
     if i_mortgage is not None:
-        base -= gamma * (i_current - i_mortgage) #having a good mortgage currently reduces chance of buying
-    return 1/12 * max((1/tenure_years) * base, 0.0)
+        base -= gamma * (
+            i_current - i_mortgage
+        )  # having a good mortgage currently reduces chance of buying
+    return 1 / 12 * max((1 / tenure_years) * base, 0.0)
 
-def asking_price(p_bar_tract:float, f_bar_tract:float, alpha:float, 
-                 beta:float, zeta:float, epsilon_std:float,
-                 rng: np.random.Generator) -> float:
+
+def asking_price(
+    p_bar_tract: float,
+    f_bar_tract: float,
+    alpha: float,
+    beta: float,
+    zeta: float,
+    epsilon_std: float,
+    rng: np.random.Generator,
+) -> float:
     """EQ 7: ln(p_s) = alpha + ln(p_bar) - beta*ln(zeta*(1+f_bar))+epsilon
-        p_bar_tract, f_bar_tract computed at CENSUS TRACT level, instead of area wide 
-        
-        p_bar_tract: average sold-price of homes of this quality
-        f_bar_tract: average number of days on market for all house qualities
-        """
-    
+    p_bar_tract, f_bar_tract computed at CENSUS TRACT level, instead of area wide
+
+    p_bar_tract: average sold-price of homes of this quality
+    f_bar_tract: average number of days on market for all house qualities
+    """
+
     epsilon = rng.normal(0, epsilon_std)
-    ln_ps = alpha + np.log(p_bar_tract) - beta * np.log(zeta * (1 + f_bar_tract)) + epsilon
+    ln_ps = (
+        alpha + np.log(p_bar_tract) - beta * np.log(zeta * (1 + f_bar_tract)) + epsilon
+    )
     return np.exp(ln_ps)
 
-def price_reduction(current_price: float, reduction_prob: float, 
-                    epsilon_std:float, rng: np.random.Generator,
-                    vacancy_tax_multiplier: float = 1.0) -> float:
-    
+
+def price_reduction(
+    current_price: float,
+    reduction_prob: float,
+    epsilon_std: float,
+    rng: np.random.Generator,
+    vacancy_tax_multiplier: float = 1.0,
+) -> float:
     """EQ 8: chance of price reduction for each time step
-    vacancy_tax_multiplier > 1: increases reduction probability for investor held units"""
+    vacancy_tax_multiplier > 1: increases reduction probability for investor held units
+    """
 
     prob = min(reduction_prob * vacancy_tax_multiplier, 1.0)
-    if rng.random() < prob: #chooses to reduce price
-        #have to force epsilon <= 0
+    if rng.random() < prob:  # chooses to reduce price
+        # have to force epsilon <= 0
         epsilon = -abs(rng.normal(0, epsilon_std))
         reduction_fraction = np.exp(epsilon)
         return max(current_price * (1 - reduction_fraction), 0)

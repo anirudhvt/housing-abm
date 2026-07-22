@@ -7,6 +7,19 @@ name = "housing_abm"
 version = "0.1.0"
 description = "Agent-based model of housing market"
 requires-python = ">=3.10"
+dependencies = [
+    "mesa>=3.0",
+    "numpy",
+    "scipy",
+    "pandas",
+    "pyyaml",
+    "networkx",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "black", "ruff"]
+calibration = ["census", "us"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

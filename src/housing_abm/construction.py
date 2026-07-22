@@ -1,7 +1,9 @@
 """Section 3.1 step 2 + Appendix A1
 Adds new for sale stock whenever house to household ratio falls below target
 
-Placeholder: new units priced at tract current pricing, rather than house price datasets"""
+Placeholder: new units priced at tract current pricing, rather than house price datasets
+"""
+
 from housing_abm.agents.first_time_buyer import FirstTimeBuyer
 from housing_abm.agents.housing_unit import HousingUnit
 from housing_abm.agents.renter import Renter
@@ -21,7 +23,7 @@ def run_construction(model):
         return
 
     tract = model.tracts["tract_001"]
-    for _ in range(deficit): #create new houses to fill the gap, put on sale market
+    for _ in range(deficit):  # create new houses to fill the gap, put on sale market
         unit = HousingUnit(model=model, tract_id="tract_001", quality=1.0)
         unit.price = tract.price_per_quality
         unit.on_sale_market = True

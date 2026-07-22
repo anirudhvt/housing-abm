@@ -1,13 +1,22 @@
 """EQ 5: buy vs rent decision"""
+
 import numpy as np
+
 
 def sigmoid(x: float) -> float:
     return 1 / (1 + np.exp(-x))
 
-def p_buy(rent_q: float, tau: float, monthly_mortgage: float,
-          price: float, g: float, beta: float) -> float:
+
+def p_buy(
+    rent_q: float,
+    tau: float,
+    monthly_mortgage: float,
+    price: float,
+    g: float,
+    beta: float,
+) -> float:
     """EQ 5: P(buy) = sigma(beta * (rQ(1+tau) - 12(m-pg)))
-    
+
     rent_q: annual rent for house of quality Q
     tau: psychologist cost-of-renting premium (recalibrated)
     monthly_mortgage: m, from equations/morgage.py for fha and conventional loans

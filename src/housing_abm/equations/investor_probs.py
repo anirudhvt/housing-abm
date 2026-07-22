@@ -3,9 +3,11 @@
 beta: beta_small_landlord and beta_institutional matched against purchase share (atlanta)
 
 """
+
 from .buy_rent import sigmoid
 
-def p_buy_investor(omega: float, beta:float, policy_blocked: bool = False) -> float:
+
+def p_buy_investor(omega: float, beta: float, policy_blocked: bool = False) -> float:
     """EQ 10: P(buy) = sigmoid(beta * omega)^(1/12)
     policy_blocked: True to force P(0) for hard policies: waiting period,
     ownership cap, geographic restriction - BEFORE equatoin runs
@@ -13,7 +15,7 @@ def p_buy_investor(omega: float, beta:float, policy_blocked: bool = False) -> fl
 
     if policy_blocked:
         return 0.0
-    return sigmoid(beta * omega) ** (1/12)
+    return sigmoid(beta * omega) ** (1 / 12)
 
 
 def p_sell_investor(psi: float, beta: float, forced_divesture: bool = False) -> float:
@@ -23,4 +25,4 @@ def p_sell_investor(psi: float, beta: float, forced_divesture: bool = False) -> 
 
     if forced_divesture:
         return 1.0
-    return 1- sigmoid(beta * psi) ** (1/12)
+    return 1 - sigmoid(beta * psi) ** (1 / 12)
