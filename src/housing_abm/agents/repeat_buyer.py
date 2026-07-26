@@ -128,10 +128,8 @@ class RepeatBuyer(HouseholdAgent):
         """EQ 3/5, purchase decision for new home
         unrealized equity when listing old home, liquid bank once old home is osld"""
         tract = self.model.tracts[self.tract_id]
-        g = price_appreciation_expectation(
-            tract.hpi_history,
-            alpha=self.model.params["appreciation_eq4"]["alpha_household"],
-        )
+        g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_household"])
+
         mort_cfg = self.model.mortgage_terms[
             "conventional"
         ]  # loan terms for conventional loans

@@ -25,5 +25,5 @@ def p_buy(
     beta: sensitivity parameter"""
 
     renting_cost = rent_q * (1 + tau)
-    buying_cost = 12 * (monthly_mortgage - price * g)
+    buying_cost = 12 * monthly_mortgage - price * g
     return sigmoid(beta * (renting_cost - buying_cost))

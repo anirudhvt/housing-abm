@@ -1,25 +1,36 @@
-"""Loose reproduction of the paper's Section 5 validation approach: run the
-model and check whether a handful of target statistics land in a plausible
-range, the way the paper checks against the FPC's nine housing core
-indicators (Figure 3). This is NOT a pass/fail gate the way the sanity
-dashboard is - it's a sense-check that the model's behavior is at least in
-the right ballpark before trusting any experiment built on top of it.
-
-Target ranges here are generic US housing-market plausibility bands, not
-Atlanta-specific - real Atlanta ACS/Census/HMDA targets should replace these
-once that data is sourced (see the calibration step in the project roadmap).
-
-Usage: python scripts/validate_against_paper.py [--months 150] [--households 300]
+"""Loose reproduction of the paper's Section 5 validation approach
 """
 
 import argparse
 import sys
-
+import pandas as pd
 sys.path.insert(0, "src")
 
 from housing_abm.model import AtlantaHousingModel
 from housing_abm.agents.repeat_buyer import RepeatBuyer
 from housing_abm.agents.first_time_buyer import FirstTimeBuyer
+
+def _appreciation_target():
+    """Real Atlanta appreciation interquartile range from 
+    atlanta_case_shiller_2020_2023.csv
+    Falls back to placeholder if pull not run yet"""
+    try:
+        cs = pd.read_csv("atlanta_case_shiller_2020_2023.csv")
+        low = cs["g"].quantile(0.25)
+        high = cs["g"].quantile(0.75)
+        note = (
+            f"25th-75th pctile of real Atlanta YoY appreciation, "
+            f"2020-2023 (Case-Shiller ATXRSA); full-period mean was "
+            f"{cs['g'].mean():.3f}"
+        )
+        return low, high, note
+    except FileNotFoundError:
+        return (
+            -0.05,
+            0.20,
+            "PLACEHOLDER band -- run pull_case_shiller_data.py to replace "
+            "with real Atlanta 2020-2023 appreciation",
+        )
 
 # (label, low, high, note)
 TARGETS = [
@@ -47,6 +58,7 @@ TARGETS = [
         5.0,
         "typical loan-to-income multiples for US mortgages",
     ),
+    ("annual_appreciation_g", *_appreciation_target())
 ]
 
 
@@ -76,6 +88,7 @@ def compute_snapshot(model):
         "rental_vacancy_rate": model._rental_vacancy_rate(),
         "mean_ltv_owner_occupier": sum(ltvs) / len(ltvs) if ltvs else None,
         "mean_lti_owner_occupier": sum(ltis) / len(ltis) if ltis else None,
+        "annual_appreciation_g": model._appreciation_g()
     }
 
 

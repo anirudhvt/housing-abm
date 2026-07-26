@@ -1,0 +1,9 @@
+# LTI (loan-to-income) soft limit
+- type: lti_limit
+  loan_type: fha
+  hard_limit: 3.5
+  soft_allowance: 0.15
+- type: lti_limit
+  loan_type: conventional
+  hard_limit: 3.5
+  soft_allowance: 0.15

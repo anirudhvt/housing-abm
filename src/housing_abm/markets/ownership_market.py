@@ -1,8 +1,8 @@
-"""Placeholder ownership market, one round bidding
-TODO: replace with multi-round matching"""
+"""Placeholder ownership market, one round bidding"""
 
 from housing_abm.agents.housing_unit import HousingUnit
 from housing_abm.equations.market_matching import (
+    pick_preferred,
     sample_bid_up_multiplier,
     max_rounds,
     expected_gross_rental_yield,
@@ -64,12 +64,9 @@ def _preferred_offer(bid, affordable_offers, model):
                 rent_estimate, unit.price, tract.avg_days_on_market()
             )
 
-        return max(
-            affordable_offers, key=yield_key
-        )  # search through affordable households for best yield
-    return max(
-        affordable_offers, key=lambda unit: unit.quality
-    )  # everyone else looks for quality
+        return pick_preferred(model.random_gen, affordable_offers, yield_key)
+    return pick_preferred(model.random_gen, affordable_offers, lambda unit: unit.quality)
+      # everyone else looks for quality
 
 
 def _settle_purchase(model, unit, agent, down_payment, final_price):

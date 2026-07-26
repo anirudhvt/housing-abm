@@ -52,3 +52,11 @@ def max_rounds(n_bids: int, n_offers: int, n_households: int, round_floor: int) 
     n_orders = n_bids + n_offers
     paper_formula = min(n_households / 1000.0, 1.0 + n_orders / 5_000_000.0)
     return max(round_floor, round(paper_formula))  # use paper's formula if big enough
+
+def pick_preferred(rng: np.random.Generator, candidates: list, key_fn) -> object:
+    """Pick highest key candidate, breaking ties randomly"""
+    best_key = max(key_fn(c) for c in candidates)
+    tied = [ c for c in candidates if key_fn(c) == best_key]
+    if len(tied) == 1:
+        return tied[0]
+    return tied[rng.integers(len(tied))]

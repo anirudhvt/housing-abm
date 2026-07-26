@@ -87,10 +87,8 @@ class SmallLandlord(HouseholdAgent):
                 unit.quality
             )  # current market value of the unit
             equity = current_value - unit.mortgage_principal
-            g = price_appreciation_expectation(
-                tract.hpi_history,
-                alpha=self.model.params["appreciation_eq4"]["alpha_household"],
-            )
+            g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_household"])
+            
             psi = effective_yield_sell(
                 price=current_value,
                 equity=equity,
@@ -135,10 +133,7 @@ class SmallLandlord(HouseholdAgent):
         tract = self.model.tracts[self.tract_id]
 
         target_price = tract.price_per_quality
-        g = price_appreciation_expectation(
-            tract.hpi_history,
-            alpha=self.model.params["appreciation_eq4"]["alpha_household"],
-        )
+        g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_household"])
 
         down_payment, is_cash = (
             down_payment_investor(  # follows cash rule for buying if has enough money

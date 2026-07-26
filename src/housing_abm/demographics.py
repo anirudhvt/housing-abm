@@ -36,7 +36,7 @@ def process_aging_and_births(model):
     age_lo, age_hi = cfg["new_household_age_range"]
     for _ in range(n_births):  # create new households within age range, start as renter
         age = int(model.random_gen.integers(age_lo, age_hi))
-        income = float(model.random_gen.lognormal(mean=9.4, sigma=0.55))
+        income = float(model.random_gen.lognormal(mean=8.9, sigma=0.55))
         Renter(model=model, income=income, age=age, tract_id="tract_001")
 
 

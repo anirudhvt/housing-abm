@@ -84,10 +84,8 @@ class InstitutionalInvestor(HouseholdAgent):
             tract = self.model.tracts[unit.tract_id]
             current_value = tract.avg_sold_price(unit.quality)
             equity = current_value - unit.mortgage_principal
-            g = price_appreciation_expectation(
-                tract.hpi_history,
-                alpha=self.model.params["appreciation_eq4"]["alpha_institutional"],
-            )
+            g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_institutional"])
+
             psi = effective_yield_sell(
                 price=current_value,
                 equity=equity,
@@ -128,10 +126,8 @@ class InstitutionalInvestor(HouseholdAgent):
 
         tract = self.model.tracts[self.tract_id]
         target_price = tract.price_per_quality
-        g = price_appreciation_expectation(
-            tract.hpi_history,
-            alpha=self.model.params["appreciation_eq4"]["alpha_institutional"],
-        )
+        g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_institutional"])
+
 
         down_payment, is_cash = down_payment_investor(
             price=target_price,

@@ -27,6 +27,7 @@ baseline_run.png
 
 # Raw data pulls (regenerate via scripts/pull_acs_data.py; requires CENSUS_API_KEY)
 atlanta_*_2019.csv
+*.csv
 
 # OS
 .DS_Store

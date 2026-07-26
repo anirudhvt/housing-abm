@@ -5,7 +5,7 @@ from housing_abm.equations.rental_pricing import (
     sample_lease_length,
     small_landlord_rent,
 )
-from housing_abm.equations.market_matching import sample_bid_up_multiplier, max_rounds
+from housing_abm.equations.market_matching import sample_bid_up_multiplier, max_rounds, pick_preferred
 
 
 def generate_placeholder_rental_stock(
@@ -80,6 +80,7 @@ def run_rental_market(model):
     )
 
     matched_agents = []
+    rejected = {} #agent -> set of units they've lost a bid on this month
 
     for _round in range(n_rounds):
         if not remaining_agents or not remaining_units:  # bidders or houses ran out
@@ -88,10 +89,11 @@ def run_rental_market(model):
         # phase 1: remaining renters claim best quality unit they can afford
         claims = {}  # unit -> list of agents
         for agent in remaining_agents:
-            affordable = [u for u in remaining_units if bids[agent] >= u.rent]
+            already_tried = rejected.get(agent, set())
+            affordable = [u for u in remaining_units if bids[agent] >= u.rent and u not in already_tried]
             if not affordable:  # nothing on the market is cheap enough
                 continue
-            best_unit = max(affordable, key=lambda u: u.quality)
+            best_unit = pick_preferred(model.random_gen, affordable, lambda u: u.quality)
             claims.setdefault(best_unit, []).append(agent)
 
         if not claims:
@@ -103,6 +105,7 @@ def run_rental_market(model):
             if len(claimants) == 1:  # only 1 person wants that house
                 winner = claimants[0]
                 final_rent = unit.rent
+                losers = []
             else:  # bid up to settle ties
                 multiplier = sample_bid_up_multiplier(
                     model.random_gen,
@@ -117,11 +120,17 @@ def run_rental_market(model):
                     a for a in claimants if bids[a] >= bid_up_rent
                 ]  # agents who can still afford the house
                 if not still_afford:
+                    for a in claimants: 
+                        rejected.setdefault(a, set()).add(unit)
                     continue  # priced everyone out, try again later
                 winner = model.random_gen.choice(
                     still_afford
                 )  # choose a random person to get the house
                 final_rent = bid_up_rent
+                losers = [a for a in claimants if a != winner]
+            #losers of contested unit try something else next time
+            for a in losers:
+                rejected.setdefault(a, set()).add(unit)
             # assign winner their house
             _settle_lease(model, unit, winner, final_rent)
             matched_agents.append(winner)

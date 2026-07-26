@@ -70,6 +70,5 @@ def price_reduction(
     if rng.random() < prob:  # chooses to reduce price
         # have to force epsilon <= 0
         epsilon = -abs(rng.normal(0, epsilon_std))
-        reduction_fraction = np.exp(epsilon)
-        return max(current_price * (1 - reduction_fraction), 0)
+        return max(current_price * np.exp(epsilon), 0)
     return current_price

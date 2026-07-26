@@ -76,10 +76,8 @@ class FirstTimeBuyer(HouseholdAgent):
         max_affordable_price = loan_cap + self.bank_balance
 
         # account for appreciation of the house
-        g = price_appreciation_expectation(
-            tract.hpi_history,
-            alpha=self.model.params["appreciation_eq4"]["alpha_household"],
-        )
+        g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_household"])
+
 
         exp_params = self.model.params["expenditure_eq3"]
         price = desired_expenditure(
