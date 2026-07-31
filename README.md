@@ -110,7 +110,7 @@ cd paper
 pdflatex main.tex
 bibtex main
 pdflatex main.tex
-pdflatex main.tex    # run twice more to resolve references
+pdflatex main.tex
 ```
  
 ---
