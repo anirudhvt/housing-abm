@@ -18,16 +18,29 @@ env/
 .coverage
 htmlcov/
 
-# Secrets - never commit API keys or credentials
+API keys or credentials
 .env
 *.env
 
-# Generated outputs (regenerate via scripts/, don't track output artifacts)
-baseline_run.png
-
-# Raw data pulls (regenerate via scripts/pull_acs_data.py; requires CENSUS_API_KEY)
-atlanta_*_2019.csv
-*.csv
+# Ruff / linter caches
+.ruff_cache/
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Generated outputs — regenerate via scripts/, don't track
+baseline_run.png
+
+# LaTeX build artifacts — regenerate with pdflatex
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
+paper/*.toc
+paper/*.fls
+paper/*.fdb_latexmk
+paper/_minted*/
+

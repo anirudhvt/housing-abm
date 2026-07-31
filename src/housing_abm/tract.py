@@ -66,17 +66,21 @@ class Tract:
             return 0.0
         return (self.rent_per_quality * 12) / self.price_per_quality
 
+    
     def update_hpi_history(self, window: int = 24):
         """Append this month's tract level price index to history
         Call once ownership market has run"""
-        self.hpi_history.append(self.avg_sold_price(quality=1.0))
+        current_index = self.avg_sold_price(quality=1.0)
+        self.hpi_history.append(current_index)
         self.hpi_history = self.hpi_history[-window:]
-
+        if len(self.recent_sales) >= 5:  # only update once enough sales exist
+            self.price_per_quality = current_index
+ 
         if self.external_rent_growth_series:
             idx = self._rent_growth_index % len(self.external_rent_growth_series) #repeat/cycle data when finished
             self.rent_per_quality *= 1.0 + self.external_rent_growth_series[idx]
             self._rent_growth_index += 1
-
+ 
         if self.external_g_series:
             self._g_index += 1
 

@@ -1,0 +1,8 @@
+- type: portfolio_tax
+  brackets:
+    - {min_units: 0,   max_units: 10,  rate: 0.0}
+    - {min_units: 10,  max_units: 50,  rate: 0.01}
+    - {min_units: 50,  max_units: 100, rate: 0.05}
+    - {min_units: 100, max_units: 350, rate: 0.10}
+    - {min_units: 350, max_units: null, rate: 0.20}
+  applies_to: [institutional]

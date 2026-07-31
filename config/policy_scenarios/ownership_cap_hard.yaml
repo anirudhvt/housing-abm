@@ -1,0 +1,4 @@
+- type: ownership_cap
+  max_units_absolute: 5
+  enforcement: hard
+  applies_to: [institutional]

@@ -117,6 +117,7 @@ class FirstTimeBuyer(HouseholdAgent):
             price=price,
             g=g,
             beta=buy_params["beta"],
+            annual_income = self.income * 12
         )
 
         if (

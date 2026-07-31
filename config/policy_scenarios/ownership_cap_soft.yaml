@@ -1,0 +1,6 @@
+- type: ownership_cap
+  max_units_absolute: 5
+  enforcement: soft
+  soft_target_exceedance_fraction: 0.10
+  soft_window_months: 12
+  applies_to: [institutional]

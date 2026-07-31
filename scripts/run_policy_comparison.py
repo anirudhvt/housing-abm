@@ -102,7 +102,7 @@ def main():
     parser.add_argument("--households", type=int, default=300)
     parser.add_argument("--months", type=int, default=150)
     parser.add_argument("--spinup", type=int, default=600)
-    parser.add_argument("--seeds", type=int, default=20, help="number of seeds to run (seeds 0..n-1)")
+    parser.add_argument("--seeds", type=int, default=1, help="number of seeds to run (seeds 0..n-1)")
     parser.add_argument("--seed-start", type=int, default=0)
     parser.add_argument("--policy", type=str, required=True, help="path to policy yaml to compare against baseline")
     parser.add_argument("--config", type=str, default="config/baseline_params.yaml")

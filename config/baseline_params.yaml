@@ -2,8 +2,9 @@
 
 simulation:
   n_households: 300 
-  small_landlord_fraction: 0.0333 #was 10/300 at old n_households=300 scale
-  institutional_investor_fraction: 0.0033 #was 3/300
+  small_landlord_fraction: 0.02 
+  institutional_investor_fraction: 0.013 
+  use_external_appreciation_data: false 
   
  
 initial_rental_stock:
@@ -37,7 +38,7 @@ consumption_eq2:
   alpha: 0.5 
 
 expenditure_eq3:
-  alpha_household: 4.5
+  alpha_household: 3.03
   alpha_institutional: 5.5
   beta: 0.3
   epsilon_std: 0.15
@@ -47,7 +48,7 @@ appreciation_eq4:
   alpha_institutional: 0.8
 
 buy_rent_eq5:
-  beta: 0.002
+  beta: 10
   tau: 0.1
   rent_income_fraction: 0.33
 
@@ -64,7 +65,7 @@ asking_price_eq7:
   epsilon_std: 0.5
 
 price_reduction_eq8:
-  reduction_prob: 0.15
+  reduction_prob: 0.055
   epsilon_std: 0.08
   vacancy_tax_multiplier_investor: 1.5 #investor-held vacant listings reprice faster
 
@@ -78,7 +79,7 @@ market_clearing_a4: #appendix multi round auction mechanism
 investor_yield_eq9_eq12: 
   delta_small_landlord: 0.3
   delta_institutional: 0.6
-  kappa: 0.05 #long term average rental yield
+  kappa: 0.0631 #long term average rental yield
   policy_cost: 0.0 #not modeled yet
 
 investor_probs_eq10_eq13: 
@@ -91,7 +92,7 @@ rental_pricing_eq11:
     beta: 0.0
     zeta: 1.0
     epsilon_std: 0.05
-    reprice_prob: 0.3 #chance of repricing a vacant unit each month it sits empty
+    reprice_prob: 0.6 #chance of repricing a vacant unit each month it sits empty
   institutional:
     premium: 1.04 #4% above market rate, no stickiness (EQ11 adaption)
 

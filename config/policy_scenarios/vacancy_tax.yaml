@@ -1,0 +1,4 @@
+- type: vacancy_tax
+  annual_rate: 0.03
+  vacancy_threshold_days: 90
+  applies_to: [small_landlord, institutional]

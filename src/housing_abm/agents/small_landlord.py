@@ -11,6 +11,8 @@ from housing_abm.equations.mortgage import down_payment_investor, passes_investo
 from housing_abm.equations.rental_pricing import small_landlord_rent
 from housing_abm.equations.selling import asking_price
 
+from housing_abm.policies.investor_restrictions import compute_policy_cost
+
 from .base import HouseholdAgent
 
 
@@ -97,7 +99,7 @@ class SmallLandlord(HouseholdAgent):
                 kappa=yield_cfg["kappa"],
                 r_bar=tract.gross_rental_yield(),
                 monthly_mortgage=unit.mortgage_payment,
-                policy_cost=yield_cfg["policy_cost"],
+                policy_cost=compute_policy_cost(self.model, self),
             )
             prob_sell = p_sell_investor(psi, beta=prob_cfg["beta_small_landlord"])
             if self.model.random_gen.random() < prob_sell:  # chooses to sell
@@ -182,7 +184,7 @@ class SmallLandlord(HouseholdAgent):
             kappa=yield_cfg["kappa"],
             r_bar=tract.gross_rental_yield(),
             monthly_mortgage=monthly_mortgage,
-            policy_cost=yield_cfg["policy_cost"],
+            policy_cost=compute_policy_cost(self.model, self),
         )
 
         prob_buy = p_buy_investor(omega, beta=prob_cfg["beta_small_landlord"])

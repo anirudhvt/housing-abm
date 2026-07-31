@@ -9,6 +9,10 @@ from housing_abm.equations.market_matching import (
 )
 from housing_abm.equations.selling import price_reduction
 from housing_abm.policy import enforce_lti_policies
+from housing_abm.policies.investor_restrictions import (
+    passes_unit_level_policies,
+    filter_ownership_cap_bids,
+)
 
 
 import numpy as np
@@ -141,13 +145,14 @@ def run_ownership_market(model):
 
     # EQ 8 repricing if stale listing, regardless of if there are agents bidding
     price_cfg = model.params["price_reduction_eq8"]
+    vacancy_tax_active = any(p.get("type") == "vacancy_tax" for p in model.policies)
     for unit in for_sale:
         unit.days_on_market += 1
         is_investor_listing = (
             getattr(model._resale_sellers.get(unit), "properties", None) is not None
         )
         multiplier = (
-            price_cfg["vacancy_tax_multiplier_investor"] if is_investor_listing else 1.0
+            price_cfg["vacancy_tax_multiplier_investor"] if (is_investor_listing and vacancy_tax_active) else 1.0
         )
         unit.price = price_reduction(
             current_price=unit.price,
@@ -163,6 +168,7 @@ def run_ownership_market(model):
         return
 
     enforce_lti_policies(model)  # cap over-limit bids before matching
+    filter_ownership_cap_bids(model) #drop bids over ownership cap
 
     auction_cfg = model.params["market_clearing_a4"]
     remaining_bids = list(model._ownership_bid_queue)
@@ -176,6 +182,10 @@ def run_ownership_market(model):
     )
 
     matched_bids = []
+    household_bids = [b for b in remaining_bids if not _is_investor(b["agent"])] #give household buyers first position
+    investor_bids  = [b for b in remaining_bids if _is_investor(b["agent"])]
+    if household_bids:
+        remaining_bids = household_bids + investor_bids
 
     for _round in range(n_rounds):
         if not remaining_bids or not remaining_offers:  # no one bidding or no houses
@@ -187,7 +197,7 @@ def run_ownership_market(model):
             affordable = [
                 u
                 for u in remaining_offers
-                if bid["max_price"] >= u.price and bid["agent"] is not u.owner
+                if bid["max_price"] >= u.price and bid["agent"] is not u.owner and passes_unit_level_policies(model, bid["agent"], u)
             ]
             if not affordable:
                 continue  # can't afford anything left this round

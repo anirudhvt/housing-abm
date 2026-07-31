@@ -39,6 +39,7 @@ def _settle_lease(model, unit, winner, final_rent):
     unit.rent = final_rent
     unit.tenant = winner
     unit.on_rental_market = False
+    unit.day_vacant = 0
     winner.house = unit
     winner.status = "renting"
     lease_length = sample_lease_length(model.random_gen)
@@ -51,6 +52,9 @@ def _settle_lease(model, unit, winner, final_rent):
 
 def run_rental_market(model):
     """Multi round double auction clearing of queued renters"""
+    for unit in model.rental_units:
+        if unit.tenant is None and unit.on_rental_market:
+            unit.day_vacant += 1
     vacant_units = [
         unit
         for unit in model.rental_units

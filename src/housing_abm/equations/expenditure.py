@@ -49,4 +49,4 @@ def price_appreciation_expectation(hpi_history: list[float], alpha: float) -> fl
         / (h_t_minus_13 + h_t_minus_14 + h_t_minus_15)
         - 1
     )
-    return max(min(g_t,0.08), -0.03)
+    return max(min(g_t,0.256), -0.03)
