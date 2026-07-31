@@ -115,6 +115,6 @@ pdflatex main.tex
  
 ---
 If you get an error that command pdflatex is not found, install with 
-'''bash
+```bash
 sudo apt install texlive-latex-base
-'''
+```
