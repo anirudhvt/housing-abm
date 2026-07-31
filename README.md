@@ -17,7 +17,7 @@ cd housing-abm
 
 You must create a virtual environment with the necessary packages:
 ```bash
-python -m venv myenv
+python3 -m venv myenv
 source myenv/bin/activate 
 pip install -e .
 ```
