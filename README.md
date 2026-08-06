@@ -1,5 +1,7 @@
 # housing-abm
-Agent based model of the Atlanta, Georgia housing market, adapted from Baptista et al. (2016), built with Mesa. The model evaluates six institutional investor restriction policies: waiting periods, ownership caps, purchase taxes, vacancy taxes, and progressive portfolio taxes, and tracks their effects on first-time homeownership rate, rental vacancy rate, and annual price appreciation across Monte Carlo simulations. 
+
+## Project Overview
+Agent based model of the Atlanta, Georgia housing market, built with Mesa. Institutional investors (large, corporate organizations that pool capital to purchase primarily single-family homes) have caused increased competition in the US homeownership market, raising ownership prices nationally. Because of this impact, policies have been proposed to curb institutional investors' stake in the real estate market, but long term effects of these policies remain unclear. The model evaluates six institutional investor restriction policies: waiting periods, ownership caps, purchase taxes, vacancy taxes, and progressive portfolio taxes, and tracks their effects on first-time homeownership rate, rental vacancy rate, and annual price appreciation across Monte Carlo simulations. 
 
 The accompanying paper is at paper/main.tex
 
