@@ -4,7 +4,8 @@ import numpy as np
 from mesa import Model
 from mesa.datacollection import DataCollector
 
-from housing_abm.construction import run_construction, run_investor_replenishment
+from housing_abm.construction import run_construction, run_investor_replenishment, _convert_renter_to_landlord
+from housing_abm.equations.investor_propensity import select_future_landlords
 from housing_abm.demographics import process_aging_and_births, process_deaths
 from housing_abm.agents.first_time_buyer import FirstTimeBuyer
 from housing_abm.agents.renter import Renter
@@ -158,23 +159,17 @@ class AtlantaHousingModel(Model):
                 model=self, income=income, age=age, tract_id="tract_001"
             )  # default initialization
 
-        # create small landlord and institutional investor populations
-        # TODO: replace placeholder counts/wealth draws with calibrated Atlanta investor shares
+        # convert renters to small landlords (BTL gene approach from reference)
         n_small_landlords = round(
-            n_households 
+            n_households
             * self.params.get("simulation", {}).get("small_landlord_fraction", 0.0)
         )
-        for _ in range(n_small_landlords):
-            income = float(
-                self.random_gen.lognormal(mean=9.8, sigma=0.5)
-            )  # landlords skew higher-income than renters
-            age = int(self.random_gen.integers(30, 70))
-            landlord = SmallLandlord(
-                model=self, income=income, age=age, tract_id="tract_001"
-            )
-            landlord.bank_balance = float(
-                self.random_gen.lognormal(mean=11.5, sigma=0.6)
-            )  # starting cash for down payments
+        eligible_renters = [a for a in self.agents if isinstance(a, Renter)]
+        selected = select_future_landlords(
+            eligible_renters, n_small_landlords, self.random_gen
+        )
+        for renter in selected:
+            _convert_renter_to_landlord(self, renter)
 
         n_institutional_investors = round(
             n_households
@@ -182,11 +177,10 @@ class AtlantaHousingModel(Model):
                 "institutional_investor_fraction", 0.0
             )
         )
-
         for _ in range(n_institutional_investors):
             available_capital = float(
                 self.random_gen.lognormal(mean=13.0, sigma=0.5)
-            )  # much larger capital pools
+            )
             InstitutionalInvestor(
                 model=self, available_capital=available_capital, tract_id="tract_001"
             )
@@ -255,6 +249,9 @@ class AtlantaHousingModel(Model):
             tract.update_hpi_history()
 
         run_rental_market(self)
+
+        for tract in self.tracts.values():
+            tract.update_rent_history()
 
         update_ownership_cap_soft_state(self) #roll soft-cap counters
 

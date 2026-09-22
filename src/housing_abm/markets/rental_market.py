@@ -39,9 +39,11 @@ def _settle_lease(model, unit, winner, final_rent):
     unit.rent = final_rent
     unit.tenant = winner
     unit.on_rental_market = False
+    days_vacant = unit.day_vacant
     unit.day_vacant = 0
     winner.house = unit
     winner.status = "renting"
+    model.tracts[unit.tract_id].record_letting(final_rent, unit.quality, days_vacant)
     lease_length = sample_lease_length(model.random_gen)
     # to avoid leases lining up, on the first step of the model we give agents a varied head start
     if getattr(winner, "_ever_leased", False):  # randomly start somewhere in the lease
@@ -145,3 +147,8 @@ def run_rental_market(model):
 
         # unmatched bidders resubmit next month
         model._rental_bid_queue = []  # clear queue to prevent carryover issues
+
+    reduction = model.params.get("rental_market", {}).get("vacant_rent_reduction", 0.05)
+    for unit in model.rental_units:
+        if unit.on_rental_market and unit.tenant is None and unit.rent is not None:
+            unit.rent *= (1 - reduction)

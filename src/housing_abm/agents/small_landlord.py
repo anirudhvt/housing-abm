@@ -64,7 +64,7 @@ class SmallLandlord(HouseholdAgent):
                 tract = self.model.tracts[unit.tract_id]
                 unit.rent = small_landlord_rent(
                     r_bar_tract=tract.rent_per_quality * unit.quality,
-                    f_bar_tract=tract.avg_days_on_market(),
+                    f_bar_tract=tract.avg_days_vacant(),
                     alpha=cfg["alpha"],
                     beta=cfg["beta"],
                     zeta=cfg["zeta"],

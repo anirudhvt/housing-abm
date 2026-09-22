@@ -163,7 +163,10 @@ demographics: #section 3.2 placeholders
     age_scale: 6 #how sharpy hazard rises with age
     mortality_scale: 1.0 #placeholder
 
-construction: #section 3.1 step 2 
+rental_market:
+  vacant_rent_reduction: 0.05
+
+construction: #section 3.1 step 2
   target_house_to_household_ratio: 1.098
 
 fed_rate_process: #exogenous 30yr mortgage rate EQ 16

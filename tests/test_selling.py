@@ -115,7 +115,7 @@ def test_price_reduction_vacancy_multiplier_increases_trigger_probability(
 ):
     # a rng that triggers only for prob >= 0.2 should trigger under the
     # investor multiplier (0.15*1.5=0.225) but not without it (0.15)
-    borderline_rng = make_fixed_rng(random_value=0.2)
+    borderline_rng = make_fixed_rng(random_value=0.2, normal_value=1.0)
     without_multiplier = price_reduction(
         100_000,
         reduction_prob=0.15,
