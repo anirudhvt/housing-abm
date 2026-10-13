@@ -1,8 +1,15 @@
+# Progressive annual tax on portfolio size.
+#
+# The previous brackets ran 10 / 50 / 100 / 350 units against a realised
+# institutional portfolio distribution of roughly 0-13 units, so essentially
+# every holding fell in the 0% bracket: the scenario nominally tested a
+# progressive tax but actually tested no tax at all, which is the whole reason
+# it produced "the smallest effect, not statistically distinguishable from
+# zero". Brackets now span the distribution the model actually produces.
 - type: portfolio_tax
   brackets:
-    - {min_units: 0,   max_units: 10,  rate: 0.0}
-    - {min_units: 10,  max_units: 50,  rate: 0.01}
-    - {min_units: 50,  max_units: 100, rate: 0.05}
-    - {min_units: 100, max_units: 350, rate: 0.10}
-    - {min_units: 350, max_units: null, rate: 0.20}
+    - {min_units: 0, max_units: 3,     rate: 0.0}
+    - {min_units: 3, max_units: 6,     rate: 0.01}
+    - {min_units: 6, max_units: 9,     rate: 0.03}
+    - {min_units: 9, max_units: null,  rate: 0.06}
   applies_to: [institutional]

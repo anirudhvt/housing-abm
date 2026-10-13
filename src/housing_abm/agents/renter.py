@@ -36,9 +36,7 @@ class Renter(HouseholdAgent):
                 return  # we don't model leaving leases early
 
             # otherwise, lease has ended, returning to social housing
-            self.house.tenant = None
-            self.house.on_rental_market = True  # relist house
-
+            self.model.end_tenancy(self.house)  # relist after void period
             self.house = None
             self.status = "social_housing"
         else:  # not housed yet

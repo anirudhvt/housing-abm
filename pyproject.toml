@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml",
     "networkx",
     "matplotlib",
+    "requests",
 ]
 
 [project.optional-dependencies]

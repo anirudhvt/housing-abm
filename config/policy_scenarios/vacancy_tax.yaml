@@ -1,4 +1,9 @@
+# Annual holding charge on investor units left vacant past a grace period.
+#
+# vacancy_threshold_days is compared against HousingUnit.day_vacant, which
+# counts model steps (months); the comparison now converts properly, so the
+# grace period is 90 days rather than the 90 months it was enforced as.
 - type: vacancy_tax
   annual_rate: 0.03
   vacancy_threshold_days: 90
-  applies_to: [small_landlord, institutional]
+  applies_to: [institutional]

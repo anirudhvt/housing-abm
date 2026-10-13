@@ -1,3 +1,14 @@
+# Hard cap: bids above the cap are refused, and excess holdings are listed for
+# sale as they fall vacant.
+#
+# The cap is an absolute unit count, not a per-capita one, and that is the
+# scale-invariant choice in this model: institutional_investor_fraction ties
+# the *number* of investors to the household count, so the rental stock and
+# the investor count grow together and the mean portfolio stays near 7-12
+# units at every population size tested (300 to 2400 households). A cap
+# expressed per 1000 households would therefore get looser as the population
+# grows -- at 1200 households it stopped binding entirely and the measured
+# effect was exactly zero on every outcome.
 - type: ownership_cap
   max_units_absolute: 5
   enforcement: hard

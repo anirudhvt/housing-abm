@@ -1,3 +1,6 @@
+# Soft cap: over-cap bids are let through only at a rate that holds realised
+# exceedance near the target share. No forced divestiture.
+# See ownership_cap_hard.yaml on why the threshold is an absolute count.
 - type: ownership_cap
   max_units_absolute: 5
   enforcement: soft

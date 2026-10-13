@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 from housing_abm.equations.mortgage import (
     max_loan_owner_occupier,
     passes_investor_dscr,
     down_payment_owner,
     down_payment_investor,
+    estimate_floor_share_and_fit,
 )
 
 #max loan for owner occupier 
@@ -215,3 +217,26 @@ def test_investor_down_payment_institutional_respects_p_cash(
     )
     assert is_cash_always is True
     assert is_cash_never is False
+
+
+# estimate_floor_share_and_fit -- the calibration helper behind
+# scripts/calibrate_downpayment_eq17.py, previously written but never
+# exercised by any test or caller
+
+def test_estimate_floor_share_and_fit_reports_all_at_floor_share():
+    pcts = np.array([0.02, 0.03, 0.20, 0.25, 0.30])
+    result = estimate_floor_share_and_fit(pcts, floor_band=0.05)
+    assert result["p_floor"] == 0.4  # 2 of 5 observations <= 0.05
+
+
+def test_estimate_floor_share_and_fit_recovers_a_known_lognormal():
+    rng = np.random.default_rng(0)
+    true_m, true_s = -1.2, 0.4
+    above_floor = rng.lognormal(mean=true_m, sigma=true_s, size=20_000)
+    # inject a floor-clustered minority so p_floor isn't simply 0
+    floor_obs = np.full(2_000, 0.02)
+    pcts = np.concatenate([above_floor, floor_obs])
+    result = estimate_floor_share_and_fit(pcts, floor_band=0.05)
+    assert result["p_floor"] == pytest.approx(2_000 / 22_000, abs=0.01)
+    assert result["lognorm_m"] == pytest.approx(true_m, abs=0.05)
+    assert result["lognorm_s"] == pytest.approx(true_s, abs=0.05)

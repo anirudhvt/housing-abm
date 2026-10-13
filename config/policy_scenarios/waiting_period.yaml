@@ -1,3 +1,10 @@
+# 60-day exclusive window for owner-occupiers on newly listed homes.
+#
+# applies_to was [small_landlord, institutional] while all five other
+# scenarios were institutional-only. That made this the only policy
+# restricting two agent classes rather than one, so its larger measured
+# effect partly reflected a broader treatment rather than a better mechanism.
+# All six scenarios now target the same population.
 - type: waiting_period
   days: 60
-  applies_to: [small_landlord, institutional]
+  applies_to: [institutional]

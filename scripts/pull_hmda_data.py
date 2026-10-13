@@ -24,9 +24,18 @@ FIELDS = [
     "activity_year", "lei", "county_code", "census_tract",
     "loan_type", "loan_purpose", "action_taken", "occupancy_type",
     "loan_amount", "loan_to_value_ratio", "property_value",
-    "income", "debt_to_income_ratio", "combined_loan_to_value_ratio",
+    "income", "debt_to_income_ratio",
     "total_units", "purchaser_type", "applicant_credit_score_type",
     "interest_rate",
+    # Bucketed borrower age ("<25", "25-34", ..., ">74", or "8888" for not
+    # applicable), reported since the 2018 HMDA rule. Confirmed present in
+    # the live API response and verified populated with plausible values
+    # (see docs/methodology.md Section 10c). Feeds an age-conditioned
+    # LTV/LTI regression -- the Atlanta equivalent of the reference model's
+    # decideLTV() -- which the model currently has no analogue for at all
+    # (mortgage_terms.yaml uses flat regulatory LTV/DTI caps with no age
+    # term).
+    "applicant_age",
 ]
 
 
@@ -45,6 +54,14 @@ def pull_year(year: int) -> pd.DataFrame:
     resp.raise_for_status()
     df = pd.read_csv(io.StringIO(resp.text), low_memory=False)
     keep = [c for c in FIELDS if c in df.columns]
+    missing = [c for c in FIELDS if c not in df.columns]
+    if missing:
+        print(
+            f"WARNING: requested field(s) not present in the API response, "
+            f"silently dropped: {missing}",
+            file=sys.stderr,
+        )
+        print(f"Columns the API actually returned: {list(df.columns)}", file=sys.stderr)
     return df[keep]
 
 def clean_hmda(df: pd.DataFrame) -> pd.DataFrame:

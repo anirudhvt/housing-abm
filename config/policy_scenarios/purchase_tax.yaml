@@ -1,3 +1,5 @@
+# Surcharge on investor acquisitions, entering the EQ 9 expected-yield
+# calculation as an annualised cost.
 - type: purchase_tax
   rate: 0.05
   applies_to: [institutional]

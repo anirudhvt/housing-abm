@@ -42,8 +42,7 @@ class FirstTimeBuyer(HouseholdAgent):
             self.lease_months_remaining -= 1
             if self.lease_months_remaining > 0:
                 return
-            self.house.tenant = None
-            self.house.on_rental_market = True
+            self.model.end_tenancy(self.house)
             self.house = None
             self.status = "social_housing"
             self._evaluate_buy_or_rent()  # redecide what to do now

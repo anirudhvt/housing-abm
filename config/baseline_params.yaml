@@ -1,14 +1,23 @@
 #placeholder parameters for initial test - run_calibration to see actual
 
 simulation:
-  n_households: 300 
-  small_landlord_fraction: 0.02 
-  institutional_investor_fraction: 0.013 
-  use_external_appreciation_data: false 
-  
- 
+  n_households: 600
+  # SmallLandlords are selected from the household pool (not appended),
+  # weighted by the SCF income-decile propensity curve. Institutional
+  # investors are separate corporate entities outside the household count.
+  # With units_per_household 0.5, a 600-household run has 300 rental units:
+  # 90 institutional and 210 mom-and-pop.
+  small_landlord_fraction: 0.058
+  institutional_investor_fraction: 0.0125
+  use_external_appreciation_data: false
+
+
 initial_rental_stock:
   units_per_household: 0.5 #was 150/300
+  # share of the initial rental stock handed to institutional investors; the
+  # remainder goes to small landlords. Previously the initial stock was left
+  # ownerless, so ~35% of all housing sat inert and untouchable by any policy.
+  institutional_share: 0.30
  
 initial_sale_stock: 
   units_per_household: 0.667 #was 200/300
@@ -64,10 +73,89 @@ asking_price_eq7:
   zeta: 0.032
   epsilon_std: 0.5
 
+sale_market:
+  # Months a listing sits before its owner withdraws it. Nothing previously
+  # took a listing off the market, so unsold homes accumulated indefinitely
+  # and repeat buyers carrying one were deadlocked -- unable to buy, re-price
+  # or withdraw. A withdrawn home reverts to owner-occupation and its owner
+  # rolls the EQ 6 selling probability again from the next month.
+  # Six months is the standard US exclusive-right-to-sell listing term, and it
+  # brings months-of-inventory from ~108 to ~6, into the range a real sale
+  # market runs, without distorting the price level.
+  withdraw_after_months: 6
+
+tract_calibration:
+  # 2019 Atlanta-metro price and rent levels, computed as the calendar-2019
+  # mean of atlanta_zillow_zhvi.csv / atlanta_zillow_zori.csv (both already in
+  # the repo, previously unused). These match the paper's own cited Section
+  # III figures almost exactly (ZHVI $248,717, ZORI $1,308), confirming the
+  # CSVs are the actual calibration source -- they just weren't wired into the
+  # model's initial conditions, which instead used hand-typed round defaults
+  # (250000 / 1400). This is the "reference price" the tract's smoothed price
+  # series reverts toward -- see market_smoothing below and Tract.__init__.
+  reference_price_per_quality: 248716.72   # 2019 ZHVI mean (12 monthly obs)
+  reference_rent_per_quality: 1307.55      # 2019 ZORI mean (12 monthly obs)
+
+market_smoothing:
+  # Ported from the reference Java model (Baptista et al. 2016,
+  # HousingMarketStats.java / config.properties). The Atlanta port previously
+  # hard-overwrote tract.price_per_quality with the raw median of the last 60
+  # sales every month. In a thin market (few sales/month) that raw median is a
+  # noisy estimator with occasional large jumps, and because next month's
+  # appreciation signal (EQ4) is computed FROM that same series, those jumps
+  # compound: a jump raises g, which raises desired_expenditure (EQ3), which
+  # raises the next sale price, which raises the median further. Measured at
+  # 300 households this ran the price level to ~29x median income (vs ~7.6x
+  # at 900 households) inside 15 years -- a reflexive bubble specific to thin
+  # markets, not a calibration-band miss.
+  #
+  # The reference model avoids this with two-stage smoothing every month:
+  #   1. EMA: blend this month's realized sale average into the smoothed
+  #      price at a fixed monthly weight (smoothing_factor, derived below).
+  #   2. Reversion: pull the smoothed price back toward the fixed calibrated
+  #      reference level (tract_calibration above) scaled by the house price
+  #      index, every month regardless of whether there were sales. This is
+  #      the safety valve a pure EMA lacks -- nothing stops a EMA-only price
+  #      from drifting arbitrarily far from fundamentals over a long enough
+  #      sales drought; the reversion term bounds that drift.
+  #
+  # cumulative_weight_beyond_year: the reference's CUMULATIVE_WEIGHT_BEYOND_YEAR
+  # (config.properties = 0.25) -- the fraction of an EMA's weight still coming
+  # from observations older than 12 months. Converted to a monthly smoothing
+  # factor via smoothing_factor = 1 - cumulative_weight_beyond_year^(1/12).
+  cumulative_weight_beyond_year: 0.25   # -> smoothing_factor ~= 0.1091/month
+  # market_average_price_decay: the reference's MARKET_AVERAGE_PRICE_DECAY
+  # (config.properties = 0.5) -- weight retained on the EMA each month before
+  # blending in the reversion term. At 0.5, half the gap between the smoothed
+  # price and the reference-implied level closes every month.
+  market_average_price_decay: 0.5
+  # Rent-side equivalent, applied by Tract.update_rent_history. Same value as
+  # the price side: the reference uses one relaxation constant for its market
+  # price series and the rental market is cleared by the same mechanism, so
+  # there is no reason for the two to differ until data says otherwise.
+  market_average_rent_decay: 0.5
+
 price_reduction_eq8:
   reduction_prob: 0.055
   epsilon_std: 0.08
   vacancy_tax_multiplier_investor: 1.5 #investor-held vacant listings reprice faster
+
+rental_market:
+  # Reference section 3.4.4: "If a house on the rental market does not get
+  # filled, the price is reduced each month by a constant fraction of 5%."
+  # This is the rental analogue of EQ8's sale-market price reduction, and it
+  # is the only downward force on rents -- bid-up on contested units pushes
+  # rents up, and EQ11's noise is zero-mean, so without this the rent level
+  # ratchets upward without bound once rents are formed endogenously
+  # (measured: 3.4x the calibrated anchor, 22.5% gross yield, before this
+  # was added). See docs/reference_gap_analysis.md Problem 1.
+  vacant_rent_reduction: 0.05
+  # frictional void between tenancies: a vacated unit needs cleaning, repair and
+  # marketing before it can be re-let. With no void, turnover produces zero
+  # measured vacancy because the rental market re-lets a unit in the same month
+  # it is vacated. One month of void against an ~18-month average lease gives a
+  # turnover vacancy rate in the ACS range for metro Atlanta (~7%).
+  void_months: 1
 
 market_clearing_a4: #appendix multi round auction mechanism
   bid_up_pct: 0.0075 #0.75% bid up per 7-day window
@@ -81,6 +169,11 @@ investor_yield_eq9_eq12:
   delta_institutional: 0.6
   kappa: 0.0631 #long term average rental yield
   policy_cost: 0.0 #not modeled yet
+  # share of positive net rental cash flow institutional investors distribute to
+  # shareholders each month. REIT structures must distribute ~90% of taxable
+  # income; without any outflow investor capital compounds without bound and
+  # their share of the rental stock never stops growing.
+  institutional_payout_ratio: 0.9
 
 investor_probs_eq10_eq13: 
   beta_small_landlord: 50.0
@@ -149,6 +242,38 @@ downpayment_eq18:
 repeat_buyer_promotion:
   min_tenure_months: 12 #PLACEHOLDER
 
+
+income_distribution:
+  # One lognormal for the household population, used for both the initial
+  # cohort and every later entrant. Previously the initial cohort was drawn
+  # from lognormal(8.6, 0.65) (median ~$5,430/mo, matching the ACS metro
+  # Atlanta median) while entrants came from lognormal(8.9, 0.55)
+  # (median ~$7,330/mo). As the initial cohort was replaced the population
+  # drifted steadily richer, and homeownership drifted up with it -- a trend
+  # in every reported outcome that had nothing to do with any policy.
+  household_lognormal_mean: 8.6
+  household_lognormal_sigma: 0.65
+
+investor_propensity_eq:
+  # P(household owns other residential real estate | income decile), fit
+  # from the 2022 SCF Summary Extract Public Data (scripts/calibrate_scf.py,
+  # see docs/methodology.md Section 11/12) -- the direct US analogue of the
+  # reference Java model's WAS-derived BTLProbability curve
+  # (BTLProbability.getBinAt(incomePercentile), genuinely live in the
+  # reference's HouseholdBehaviour.java, unlike decideLTV). SCF surveys
+  # households, not LLCs/funds, so this only grounds small-landlord
+  # selection -- institutional investor counts have no survey analogue and
+  # keep their own separate calibration.
+  #
+  # Replaces the previous small_landlord_lognormal_mean/sigma (9.8, 0.5) --
+  # a disconnected, hand-picked "landlords skew higher-income" assumption.
+  # Landlord incomes are now drawn from the same household income
+  # distribution as everyone else, then selected without replacement
+  # weighted by this curve (equations/investor_propensity.py) -- the
+  # realistic income skew falls out of who gets selected, rather than being
+  # asserted as a separate distribution.
+  small_landlord_income_decile_probs:
+    [0.0297, 0.0379, 0.0745, 0.0811, 0.1375, 0.1308, 0.1294, 0.3209, 0.4298, 0.5987]
 
 household_budget:
   #netted out before considering disposable income

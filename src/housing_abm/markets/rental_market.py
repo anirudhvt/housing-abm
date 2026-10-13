@@ -5,7 +5,8 @@ from housing_abm.equations.rental_pricing import (
     sample_lease_length,
     small_landlord_rent,
 )
-from housing_abm.equations.market_matching import sample_bid_up_multiplier, max_rounds, pick_preferred
+from housing_abm.equations.market_matching import sample_bid_up_multiplier, max_rounds
+from housing_abm.markets.offer_book import OfferBook
 
 
 def generate_placeholder_rental_stock(
@@ -14,12 +15,23 @@ def generate_placeholder_rental_stock(
     "Creates fixed rental stock for skeleton market"
     # TODO: replace with tract-based generation
 
+    # same mean-preserving lognormal quality spread as the sale stock, so
+    # rental and owner-occupied units are drawn from one housing distribution
+    cfg = model.params.get("initial_sale_stock", {})
+    quality_sigma = cfg.get("quality_sigma", 0.45)
+    mu = -(quality_sigma ** 2) / 2  # E[quality] == 1
+    tract = model.tracts["tract_001"]
+
     units = []
     for _ in range(n_units):
-        unit = HousingUnit(model=model, tract_id="tract_001", quality=1.0)
+        quality = float(model.random_gen.lognormal(mean=mu, sigma=quality_sigma))
+        unit = HousingUnit(model=model, tract_id="tract_001", quality=quality)
+        # rental units need a sale price too: once they have an owner, that
+        # owner can decide to sell them, and the sale market needs a price
+        unit.price = tract.price_per_quality * quality
         # placeholder rent, small noise around base rent
         unit.rent = small_landlord_rent(
-            r_bar_tract=base_rent,
+            r_bar_tract=base_rent * quality,
             f_bar_tract=0.0,
             alpha=0.0,
             beta=0.0,
@@ -36,6 +48,12 @@ def generate_placeholder_rental_stock(
 
 def _settle_lease(model, unit, winner, final_rent):
     """Assign house to winner and start a lease"""
+    # the rent-side mirror of _settle_purchase's record_sale: this is the only
+    # place a letting actually completes, so it is where the rental market's
+    # price signal has to be formed (see Tract.update_rent_history)
+    model.tracts[unit.tract_id].record_letting(
+        rent=final_rent, quality=unit.quality, days_vacant=unit.day_vacant
+    )
     unit.rent = final_rent
     unit.tenant = winner
     unit.on_rental_market = False
@@ -52,14 +70,31 @@ def _settle_lease(model, unit, winner, final_rent):
 
 def run_rental_market(model):
     """Multi round double auction clearing of queued renters"""
+    reduction = model.params.get("rental_market", {}).get("vacant_rent_reduction", 0.0)
     for unit in model.rental_units:
         if unit.tenant is None and unit.on_rental_market:
+            # a unit that already sat unfilled last month cuts its asking rent
+            # (reference 3.4.4, the rental analogue of EQ8). Applied before the
+            # counter increments so a freshly-listed unit gets one clear month
+            # at its EQ11 asking rent first.
+            if reduction and unit.day_vacant > 0 and unit.rent:
+                unit.rent *= 1.0 - reduction
             unit.day_vacant += 1
+
+    # a unit still inside its void period counts as vacant stock but is not
+    # yet available to let. Availability is read before the counter is
+    # decremented, so a unit vacated during this month's agent step actually
+    # sits out a month rather than being re-let immediately.
     vacant_units = [
         unit
         for unit in model.rental_units
-        if unit.on_rental_market and unit.tenant is None
+        if unit.on_rental_market
+        and unit.tenant is None
+        and unit.void_months_remaining <= 0
     ]
+    for unit in model.rental_units:
+        if unit.void_months_remaining > 0:
+            unit.void_months_remaining -= 1
     if not vacant_units or not model._rental_bid_queue:  # no houses or no renters
         return
 
@@ -90,14 +125,20 @@ def run_rental_market(model):
         if not remaining_agents or not remaining_units:  # bidders or houses ran out
             break
 
-        # phase 1: remaining renters claim best quality unit they can afford
+        # phase 1: remaining renters claim best quality unit they can afford.
+        # Rent-sorted book with a prefix argmax over quality, so each renter
+        # costs O(log n) instead of a scan over every vacant unit -- see
+        # housing_abm.markets.offer_book.
+        book = OfferBook(
+            remaining_units, lambda u: u.quality, model.random_gen, price_attr="rent"
+        )
         claims = {}  # unit -> list of agents
         for agent in remaining_agents:
-            already_tried = rejected.get(agent, set())
-            affordable = [u for u in remaining_units if bids[agent] >= u.rent and u not in already_tried]
-            if not affordable:  # nothing on the market is cheap enough
+            best_unit = book.best_affordable(
+                bids[agent], excluded=rejected.get(agent)
+            )
+            if best_unit is None:  # nothing on the market is cheap enough
                 continue
-            best_unit = pick_preferred(model.random_gen, affordable, lambda u: u.quality)
             claims.setdefault(best_unit, []).append(agent)
 
         if not claims:
@@ -140,8 +181,10 @@ def run_rental_market(model):
             matched_agents.append(winner)
             leased_units.append(unit)
 
-        remaining_agents = [a for a in remaining_agents if a not in matched_agents]
-        remaining_units = [u for u in remaining_units if u not in leased_units]
+        matched_ids = {id(a) for a in matched_agents}
+        leased_ids = {id(u) for u in leased_units}
+        remaining_agents = [a for a in remaining_agents if id(a) not in matched_ids]
+        remaining_units = [u for u in remaining_units if id(u) not in leased_ids]
 
         # unmatched bidders resubmit next month
         model._rental_bid_queue = []  # clear queue to prevent carryover issues

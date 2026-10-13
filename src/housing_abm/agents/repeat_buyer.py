@@ -42,8 +42,7 @@ class RepeatBuyer(HouseholdAgent):
             if self.lease_months_remaining > 0:
                 return
             # current lease is done, get rid of current rental and re-evaluate buy vs rent
-            self.house.tenant = None
-            self.house.on_rental_market = True
+            self.model.end_tenancy(self.house)
             self.house = None
             self.status = "social_housing"
             available_capital = self.bank_balance
@@ -109,10 +108,9 @@ class RepeatBuyer(HouseholdAgent):
                 self.house.price = max(
                     self.house.price, self.house.mortgage_principal
                 )  # can't sell for less than mortgage
-                self.house.on_sale_market = True
                 self.house.days_on_market = 0
                 self.house_to_sell = self.house
-                self.model.queue_listing(self.house, seller=self)  # TODO
+                self.model.list_for_sale(self.house, seller=self)
             else:
                 return  # decides not to sell, just keep paying mortgage and wait for next month
 

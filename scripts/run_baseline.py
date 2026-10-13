@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from housing_abm.model import AtlantaHousingModel
 
 N_MONTHS = 200
-N_HOUSEHOLDS = 300
+N_HOUSEHOLDS = 600
 SEED = 42
 
 model = AtlantaHousingModel(n_households=N_HOUSEHOLDS, seed=SEED)

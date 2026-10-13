@@ -10,6 +10,8 @@ def load_policies(model, policy_paths):  # grab policies from config
     for path in policy_paths or []:
         with open(path) as f:
             model.policies.extend(yaml.safe_load(f))
+    # invalidate the by-type index built in investor_restrictions
+    model._policy_type_index = None
     _apply_hard_ltv_overrides(model)
 
 

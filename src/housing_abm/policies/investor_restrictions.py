@@ -35,6 +35,9 @@
 """
 from collections import deque
 
+# one model step is one calendar month; policy configs are written in days
+DAYS_PER_MODEL_STEP = 30
+
 _WEALTH_KEY_TO_TAG = {
     "small_landlord": "small_landlord",
     "institutional_investor": "institutional",
@@ -54,12 +57,69 @@ def _applies(policy: dict, agent) -> bool:
 
 
 def _policies_of_type(model, policy_type: str) -> list[dict]:
-    return [p for p in model.policies if p.get("type") == policy_type]
+    """Policies of one type, indexed once per model rather than re-scanned.
+
+    This is called inside the per-bid/per-unit matching loops, which made it
+    one of the hottest functions in the whole simulation.
+    """
+    index = getattr(model, "_policy_type_index", None)
+    if index is None:
+        index = {}
+        for policy in model.policies:
+            index.setdefault(policy.get("type"), []).append(policy)
+        model._policy_type_index = index
+    return index.get(policy_type, ())
 
 
 # ---------------------------------------------------------------------------
 # waiting_period + geographic_restriction, checked during run_ownership_market
 # ---------------------------------------------------------------------------
+
+def has_unit_level_policies(model) -> bool:
+    """True if any policy restricts which units an agent may bid on."""
+    return bool(
+        _policies_of_type(model, "waiting_period")
+        or _policies_of_type(model, "geographic_restriction")
+    )
+
+
+def eligible_units_for_tag(model, tag, units):
+    """Units an agent carrying `tag` may bid on, under unit-level policies.
+
+    The waiting-period and geographic restrictions depend only on the agent's
+    class and the unit, never on the individual agent, so eligibility can be
+    resolved once per class per round instead of once per (bid, unit) pair.
+    In the hot matching loop that difference was tens of millions of predicate
+    evaluations per run.
+    """
+    DAYS = DAYS_PER_MODEL_STEP
+    thresholds = [
+        p["days"] / DAYS
+        for p in _policies_of_type(model, "waiting_period")
+        if tag is not None and tag in p.get("applies_to", ["small_landlord", "institutional"])
+    ]
+    restricted = set()
+    for p in _policies_of_type(model, "geographic_restriction"):
+        if tag is not None and tag in p.get(
+            "applies_to", ["small_landlord", "institutional"]
+        ):
+            restricted.update(p.get("restricted_tracts", []))
+
+    if not thresholds and not restricted:
+        return units
+    min_days = max(thresholds) if thresholds else None
+    return [
+        u
+        for u in units
+        if (min_days is None or u.days_on_market >= min_days)
+        and u.tract_id not in restricted
+    ]
+
+
+def agent_policy_tag(agent):
+    """Public accessor for an agent's policy class tag."""
+    return _agent_tag(agent)
+
 
 def passes_unit_level_policies(model, agent, unit) -> bool:
     """call this alongside the existing max_price/ownership check when
@@ -68,7 +128,6 @@ def passes_unit_level_policies(model, agent, unit) -> bool:
     waiting_period and geographic_restriction policies.
 
     """
-    DAYS_PER_MODEL_STEP = 30  # one model step = one month, approximated as 30 days
     for policy in _policies_of_type(model, "waiting_period"):
         if not _applies(policy, agent):
             continue
@@ -182,9 +241,8 @@ def apply_forced_divestiture(model):
                 tract = model.tracts[unit.tract_id]
                 unit.price = tract.avg_sold_price(unit.quality)
                 unit.price = max(unit.price, unit.mortgage_principal)
-                unit.on_sale_market = True
                 unit.on_rental_market = False
-                model.queue_listing(unit, seller=agent)
+                model.list_for_sale(unit, seller=agent)
 
 
 # ---------------------------------------------------------------------------
@@ -201,22 +259,31 @@ def _portfolio_tax_rate(brackets: list[dict], n_units: int) -> float:
 
 
 def compute_policy_cost(model, agent) -> float:
-    """Total policy-driven cost  on this agent's expected/effective yield
-    this month
+    """Recurring policy cost on this agent's yield, as an annual rate.
+
+    Only *holding* costs belong here. The purchase tax used to be included,
+    which meant it was subtracted from EQ 12 as well as EQ 9 -- that is, a tax
+    on acquiring a home also reduced the effective yield on homes the investor
+    already owned, and so raised their probability of selling. The scenario
+    therefore made investors churn their portfolios rather than deterring
+    acquisition, and investor purchases went *up* under the tax. A purchase
+    tax is a one-off transaction cost at acquisition; it is applied in
+    acquisition_price_multiplier below, where it belongs.
     """
     total = 0.0
-
-    for policy in _policies_of_type(model, "purchase_tax"):
-        if _applies(policy, agent):
-            total += policy["rate"]
 
     for policy in _policies_of_type(model, "vacancy_tax"):
         if not _applies(policy, agent):
             continue
-        threshold = policy.get("vacancy_threshold_days", 90)
+        # HousingUnit.day_vacant is incremented once per model step, and a
+        # step is one month -- so it counts months, not days. Comparing it
+        # directly against vacancy_threshold_days meant a "90 day" grace
+        # period was enforced as 90 months (7.5 years), and the vacancy tax
+        # essentially never bound on any unit.
+        threshold_months = policy.get("vacancy_threshold_days", 90) / DAYS_PER_MODEL_STEP
         n_vacant_over_threshold = sum(
             1 for u in agent.properties
-            if u.tenant is None and getattr(u, "day_vacant", 0) >= threshold
+            if u.tenant is None and getattr(u, "day_vacant", 0) >= threshold_months
         )
         if n_vacant_over_threshold > 0 and agent.properties:
             # scale the annual rate by the share of the portfolio sitting
@@ -229,3 +296,20 @@ def compute_policy_cost(model, agent) -> float:
             total += _portfolio_tax_rate(policy["brackets"], len(agent.properties))
 
     return total
+
+
+def acquisition_price_multiplier(model, agent) -> float:
+    """Factor by which a purchase tax raises an investor's cash outlay.
+
+    The paper specifies this policy as "the effective purchase price for
+    investors is increased by the tax rate, reducing the expected yield on
+    potential acquisitions". The return still accrues on the asset's market
+    value, but the investor has to put up (1 + rate) times the cash, so the
+    tax enters EQ 9 by inflating the down payment rather than as a flat
+    subtraction from the yield.
+    """
+    multiplier = 1.0
+    for policy in _policies_of_type(model, "purchase_tax"):
+        if _applies(policy, agent):
+            multiplier += policy["rate"]
+    return multiplier

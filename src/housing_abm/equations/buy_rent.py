@@ -28,8 +28,14 @@ def p_buy(
     beta: sensitivity parameter 
     annual_income: normalizer; defaults to 1 (raw dollars)"""
     g_safe = g if g is not None else 0.0
-    g_upside = max(g_safe, 0.0)   # only positive appreciation enters buying cost
     renting_cost = rent_q * (1 + tau)
-    buying_cost = 12 * (monthly_mortgage - price * g_upside)
+    # g enters signed, as in the reference. This previously used
+    # max(g, 0), which discarded falling prices entirely: when prices fall,
+    # owning should look *worse* (the expected capital loss adds to the cost
+    # of owning) and the bust should deepen. Truncating g removed the whole
+    # downside half of the expectations channel -- the mechanism the
+    # reference identifies as the cycle driver. See
+    # docs/reference_gap_analysis.md Problem 5.
+    buying_cost = 12 * (monthly_mortgage - price * g_safe)
     normalizer = max(annual_income, 1.0)
     return sigmoid(beta * (renting_cost - buying_cost) / normalizer)

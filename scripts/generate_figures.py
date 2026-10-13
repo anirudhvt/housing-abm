@@ -11,21 +11,31 @@ Or with the test data:
 
 import argparse
 import os
+import sys
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from housing_abm.experiment import paired_summary  # noqa: E402
+
 # ── Config ──────────────────────────────────────────────────────────────────
 
-POLICY_FILES = {
-    "Waiting Period":       "waiting_period.csv",
-    "Ownership Cap (Soft)": "ownership_cap_soft.csv",
-    "Ownership Cap (Hard)": "ownership_cap_hard.csv",
-    "Purchase Tax":         "purchase_tax.csv",
-    "Vacancy Tax":          "vacancy_tax.csv",
-    "Portfolio Tax":        "portfolio_tax.csv",
+# arm name in all_policies_raw.csv -> display label
+POLICY_ARMS = {
+    "waiting_period":     "Waiting Period",
+    "ownership_cap_soft": "Ownership Cap (Soft)",
+    "ownership_cap_hard": "Ownership Cap (Hard)",
+    "purchase_tax":       "Purchase Tax",
+    "vacancy_tax":        "Vacancy Tax",
+    "portfolio_tax":      "Portfolio Tax",
 }
+
+# legacy one-file-per-policy layout, still read as a fallback
+POLICY_FILES = {label: f"{arm}.csv" for arm, label in POLICY_ARMS.items()}
 
 # Colors: access restrictions vs financial penalties
 POLICY_COLORS = {
@@ -38,45 +48,94 @@ POLICY_COLORS = {
 }
 
 METRICS = {
-    "homeownership_rate":    "First-Time Homeownership Rate",
+    "homeownership_rate":    "Homeownership Rate",
     "rental_vacancy_rate":   "Rental Vacancy Rate",
     "annual_appreciation_g": "Annual Price Appreciation",
+    "ftb_purchase_share":    "First-Time-Buyer Purchase Share",
 }
 
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 
+def _summarise(policy_label, metric, baseline_values, policy_values):
+    """One row of the figure summary, using the shared paired estimator.
+
+    This defers to housing_abm.experiment.paired_summary so the intervals
+    plotted are exactly the ones the runner reports -- t critical values with
+    the right degrees of freedom, and sd with ddof=1. The previous version
+    used 1.96 with a population standard deviation, which understates the
+    interval at these seed counts.
+    """
+    summary = paired_summary(baseline_values, policy_values, n_boot=5000)
+    if summary is None:
+        return None
+    return {
+        "policy": policy_label,
+        "metric": metric,
+        "mean_diff": summary["mean_diff"],
+        "ci_lower": summary["ci_lo"],
+        "ci_upper": summary["ci_hi"],
+        "boot_lower": summary["boot_ci_lo"],
+        "boot_upper": summary["boot_ci_hi"],
+        "p_value": summary["p_value"],
+        "arm_correlation": summary["arm_correlation"],
+        "n_seeds": summary["n"],
+        "pct_same_dir": summary["seeds_same_direction"] / summary["n"],
+    }
+
+
 def load_policy_results(results_dir: str) -> pd.DataFrame:
-    """Load all policy CSVs and compute paired differences per seed."""
+    """Paired differences per policy and metric.
+
+    Prefers all_policies_raw.csv, where every policy shares one baseline arm
+    from the same spun-up seeds. Falls back to the older layout of one CSV per
+    policy, each with its own baseline arm.
+    """
+    combined = os.path.join(results_dir, "all_policies_raw.csv")
     rows = []
+
+    if os.path.exists(combined):
+        df = pd.read_csv(combined)
+        baseline = df[df["arm"] == "baseline"].set_index("seed")
+        for arm, policy_label in POLICY_ARMS.items():
+            treated = df[df["arm"] == arm].set_index("seed")
+            if treated.empty:
+                print(f"  WARNING: no rows for arm {arm} — skipping")
+                continue
+            seeds = baseline.index.intersection(treated.index)
+            for metric in METRICS:
+                if metric not in baseline.columns:
+                    continue
+                row = _summarise(
+                    policy_label,
+                    metric,
+                    baseline.loc[seeds, metric].tolist(),
+                    treated.loc[seeds, metric].tolist(),
+                )
+                if row:
+                    rows.append(row)
+        return pd.DataFrame(rows)
+
     for policy_label, filename in POLICY_FILES.items():
         path = os.path.join(results_dir, filename)
         if not os.path.exists(path):
             print(f"  WARNING: {path} not found — skipping {policy_label}")
             continue
-
         df = pd.read_csv(path)
         baseline = df[df["arm"] == "baseline"].set_index("seed")
-        policy   = df[df["arm"] == "policy"].set_index("seed")
-
-        common_seeds = baseline.index.intersection(policy.index)
+        policy = df[df["arm"] == "policy"].set_index("seed")
+        seeds = baseline.index.intersection(policy.index)
         for metric in METRICS:
             if metric not in baseline.columns:
                 continue
-            diffs = policy.loc[common_seeds, metric].astype(float).values \
-                  - baseline.loc[common_seeds, metric].astype(float).values
-            n = len(diffs)
-            mean_diff = diffs.mean()
-            se = diffs.std() / np.sqrt(n)
-            rows.append({
-                "policy":    policy_label,
-                "metric":    metric,
-                "mean_diff": mean_diff,
-                "ci_lower":  mean_diff - 1.96 * se,
-                "ci_upper":  mean_diff + 1.96 * se,
-                "n_seeds":   n,
-                "pct_same_dir": max((diffs > 0).mean(), (diffs < 0).mean()),
-            })
+            row = _summarise(
+                policy_label,
+                metric,
+                baseline.loc[seeds, metric].tolist(),
+                policy.loc[seeds, metric].tolist(),
+            )
+            if row:
+                rows.append(row)
 
     return pd.DataFrame(rows)
 
@@ -110,35 +169,47 @@ def make_figure4(summary: pd.DataFrame, output_dir: str):
     # Zero line
     ax.axvline(0, color="#333333", linewidth=0.9, linestyle="--", zorder=2)
 
-    # Value labels on each bar
+    # Value labels, placed clear of the error bar rather than at the bar end,
+    # and scaled to the data range so they do not collide as effect sizes change
+    pad = 0.02 * (hr["ci_upper"].max() - hr["ci_lower"].min())
     for i, row in hr.iterrows():
-        val = row['mean_diff']
-        x_offset = 0.001 if val >= 0 else -0.001
-        ha = "left" if val >= 0 else "right"
+        val = row["mean_diff"]
+        anchor = row["ci_upper"] if val >= 0 else row["ci_lower"]
         ax.text(
-            val + x_offset, i,
+            anchor + (pad if val >= 0 else -pad),
+            i,
             f"{val:+.3f}",
-            va="center", ha=ha, fontsize=8.5, color="#222222"
-    )
+            va="center",
+            ha="left" if val >= 0 else "right",
+            fontsize=8.5,
+            color="#222222",
+        )
 
     # Axes
     ax.set_yticks(y_pos)
     ax.set_yticklabels(hr["policy"], fontsize=10)
-    ax.set_xlabel("Mean Change in Homeownership Rate vs. Baseline",
-                  fontsize=10)
-    ax.set_title("Figure 2: Policy Effects on First-Time Homeownership Rate",
+    ax.set_xlabel(
+        "Mean paired change in homeownership rate vs. baseline (95% CI)",
+        fontsize=10,
+    )
+    ax.set_title("Policy Effects on the Homeownership Rate",
                  fontsize=11, fontweight="bold", pad=12)
 
     # Legend
     blue_patch  = mpatches.Patch(color="#2E75B6", alpha=0.85, label="Access restriction")
     orange_patch = mpatches.Patch(color="#C55A11", alpha=0.85, label="Financial penalty")
-    #ax.legend(handles=[blue_patch, orange_patch], fontsize=9,
-    #         loc="lower right", framealpha=0.9)
+    ax.legend(
+        handles=[blue_patch, orange_patch],
+        fontsize=9,
+        loc="lower right",
+        framealpha=0.9,
+    )
 
     ax.grid(axis="x", linewidth=0.4, alpha=0.5, zorder=0)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    ax.margins(x=0.12)
 
     plt.tight_layout()
     out_path = os.path.join(output_dir, "figure4_policy_comparison.pdf")
@@ -294,6 +365,84 @@ def make_figure4b(summary: pd.DataFrame, output_dir: str):
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+def make_figure_ftb_share(summary: pd.DataFrame, output_dir: str):
+    """Policy effect on the first-time-buyer share of purchases.
+
+    This is the flow the policies act on directly -- who wins the bidding on a
+    given listing -- rather than the homeownership stock, which only moves as
+    fast as that flow accumulates. It is also the better-powered outcome: it is
+    close to white noise month to month, so averaging the measurement window
+    buys a much larger reduction in standard error than it does for the stocks.
+    """
+    data = summary[summary["metric"] == "ftb_purchase_share"].copy()
+    if data.empty:
+        print("  no ftb_purchase_share rows — skipping")
+        return
+    data = data.sort_values("mean_diff").reset_index(drop=True)
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = [POLICY_COLORS.get(p, "#888888") for p in data["policy"]]
+    y_pos = np.arange(len(data))
+
+    ax.barh(y_pos, data["mean_diff"], color=colors, alpha=0.85, height=0.6, zorder=3)
+    ax.errorbar(
+        data["mean_diff"],
+        y_pos,
+        xerr=[
+            data["mean_diff"] - data["ci_lower"],
+            data["ci_upper"] - data["mean_diff"],
+        ],
+        fmt="none",
+        color="#333333",
+        capsize=4,
+        linewidth=1.2,
+        zorder=4,
+    )
+    ax.axvline(0, color="#333333", linewidth=0.9, linestyle="--", zorder=2)
+
+    pad = 0.02 * (data["ci_upper"].max() - data["ci_lower"].min())
+    for i, row in data.iterrows():
+        value = row["mean_diff"]
+        anchor = row["ci_upper"] if value >= 0 else row["ci_lower"]
+        ax.text(
+            anchor + (pad if value >= 0 else -pad),
+            i,
+            f"{value:+.3f}",
+            va="center",
+            ha="left" if value >= 0 else "right",
+            fontsize=8.5,
+            color="#222222",
+        )
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(data["policy"], fontsize=10)
+    ax.set_xlabel(
+        "Mean change in first-time-buyer share of purchases vs. baseline",
+        fontsize=10,
+    )
+    ax.set_title(
+        "Policy Effects on the First-Time-Buyer Share of Purchases",
+        fontsize=11,
+        fontweight="bold",
+        pad=12,
+    )
+    blue = mpatches.Patch(color="#2E75B6", alpha=0.85, label="Access restriction")
+    orange = mpatches.Patch(color="#C55A11", alpha=0.85, label="Financial penalty")
+    ax.legend(handles=[blue, orange], fontsize=9, loc="lower right", framealpha=0.9)
+    ax.grid(axis="x", linewidth=0.4, alpha=0.5, zorder=0)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.margins(x=0.12)
+
+    plt.tight_layout()
+    for ext in ("pdf", "png"):
+        path = os.path.join(output_dir, f"figure_ftb_purchase_share.{ext}")
+        plt.savefig(path, bbox_inches="tight", dpi=150)
+        print(f"  Saved: {path}")
+    plt.close()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--results", required=True,
@@ -323,10 +472,14 @@ def main():
     print("Generating Figure 5...")
     make_figure5(summary, args.output)
 
+    print("Generating first-time-buyer purchase share figure...")
+    make_figure_ftb_share(summary, args.output)
+
     print("\nDone. Check your output directory for:")
     print("  figure4_policy_comparison.pdf/png")
     print("  figure4b_rental_vacancy.pdf/png")
     print("  figure5_tradeoff_scatter.pdf/png")
+    print("  figure_ftb_purchase_share.pdf/png")
 
 
 if __name__ == "__main__":
