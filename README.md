@@ -49,114 +49,86 @@ Each script writes CSVs to the project root.
 ### Step 2 - Fit downpayment distribution
  
 ```bash
-python scripts/fit_downpayment_lognormal.py
+python scripts/calibrate_downpayment_eq17.py
 ```
 
 This reads `atlanta_hmda_2019.csv` and writes `downpayment_lognormal_params.csv`, which the model uses to initialize FTB and investor down payment distributions. 
 
-### Step 3 - Check the experiment design
-
+### Step 3 - Validate the baseline model
 ```bash
-python3 scripts/diagnose_design.py --households 600 --spinup 120 --months 240 --seeds 12
+python scripts/validate_against_paper.py \
+    --households 600 --spinup 120 --months 120 --seeds 12
 ```
+ 
+Runs one seed and checks the model's output against plausibility targets from ACS, HMDA, and Case-Shiller. Expected output: homeownership rate ~0.52, rental vacancy ~0.20, LTV ~0.84, LTI ~2.19. Annual appreciation will typically be at the floor (-0.030) due to simplified repricing assumptions noted in the paper.
 
-Reports three things that determine how tight the final intervals can be:
-
-- **Stationarity.** Regresses each monthly outcome on the month index. A
-  non-zero slope means seeds are being measured at different points on their
-  own trajectories, and that spread enters the cross-seed standard deviation as
-  noise unrelated to any policy.
-- **Effective sample size.** How many *independent* months a window average is
-  worth, given autocorrelation. Rental vacancy and the purchase shares are
-  nearly white month to month, so averaging the window is worth 6-13x on their
-  standard errors; the slow-moving stocks gain much less.
-- **Measurement window.** Longer windows average away more within-run noise but
-  let the two arms of a paired comparison drift apart, so the standard error of
-  the effect is minimised at an intermediate length rather than the longest one.
-
-### Step 4 - Validate the baseline
+### Step 4 - Run policy comparisons
 
 ```bash
-python3 scripts/validate_against_paper.py --households 600 --spinup 120 --months 120 --seeds 12
+mkdir -p results
+ 
+for policy in waiting_period ownership_cap_soft ownership_cap_hard \
+              purchase_tax vacancy_tax portfolio_tax; do
+    echo "Running $policy..."
+    python scripts/run_policy_comparison.py \
+        --policy config/policy_scenarios/${policy}.yaml \
+        --households 600 --seeds 60 --months 120 --spinup 120 \
+        --output results/${policy}.csv
+done
 ```
+ 
+Each run takes approximately 20 minutes. All six together take roughly 2 hours, so take a walk or set it overnight. Results are written to `results/` as CSV files with one row per seed per situation (baseline and policy).
 
-Runs under the *same* spin-up and window as the policy experiments and reports
-an interval across seeds, so the validation table describes the model state the
-policy effects are actually measured in.
-
-### Step 5 - Run the policy comparison
-
-All six scenarios against one shared baseline:
-
+### Step 5 — Run sensitivity analysis
+ 
 ```bash
-python3 scripts/run_all_policies.py \
-    --households 600 --spinup 120 --months 120 --seeds 60 \
+python scripts/run_sensitivity.py \
+    --param all \
+    --households 600 --seeds 20 --months 120 --spinup 120 \
     --outdir results
 ```
+ 
+This sweeps `beta_institutional`, `beta_small_landlord`, and `alpha_consumption` across five values each and re-runs the full policy comparison at each value. Writes three CSVs to `results/`.
 
-Or one policy at a time, with more diagnostic output:
-
-```bash
-python3 scripts/run_policy_comparison.py \
-    --policy config/policy_scenarios/waiting_period.yaml \
-    --households 600 --spinup 120 --months 120 --seeds 60 \
-    --output results/waiting_period.csv
-```
-
-### Step 6 - Sensitivity analysis
-
-```bash
-python3 scripts/run_sensitivity.py --param all --seeds 20
-```
-
-Sweeps `beta_institutional`, `beta_small_landlord`, `alpha_consumption` and
-`delta_institutional`, re-running the full paired comparison at each value, and
-asks whether the *ranking* of policies survives parameter uncertainty.
-
-`beta_institutional` matters most: it is the shape parameter of the EQ 10/13
-logistic, so how much any financial penalty can move investor behaviour depends
-on where on that logistic the market sits.
-
-### Step 7 - Figures and paper
-
+### Step 6 — Generate figures
+ 
 ```bash
 mkdir -p figures
-python3 scripts/generate_figures.py --results results/ --output figures/
-python3 scripts/generate_heatmap.py \
+ 
+# Figures 4, 4b, 5 — policy comparison bar charts and scatter
+python scripts/generate_figures.py --results results/ --output figures/
+ 
+# Figure 6 — sensitivity heatmap
+python scripts/generate_heatmap.py \
     --input results/sensitivity_beta_institutional.csv \
     --output figures/figure6_sensitivity_heatmap.png
 
-cd paper && pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
+# Figures 6b, 6c, 6d — remaining sensitivity heatmaps
+python scripts/generate_heatmap.py \
+    --input results/sensitivity_beta_small_landlord.csv \
+    --output figures/figure6b_sensitivity_beta_sl.png
+python scripts/generate_heatmap.py \
+    --input results/sensitivity_consumption_alpha.csv \
+    --output figures/figure6c_sensitivity_consumption.png
+python scripts/generate_heatmap.py \
+    --input results/sensitivity_institutional_delta.csv \
+    --output figures/figure6d_sensitivity_delta.png
 ```
+ 
+Figures are written to `figures/` as both `.pdf` and `.png`.
 
-If `pdflatex` is missing: `sudo apt install texlive-latex-base`.
-
+### Step 7 — Compile the paper
+ 
+```bash
+cd paper
+pdflatex main.tex
+bibtex main
+pdflatex main.tex
+pdflatex main.tex
+```
+ 
 ---
-
-## Experiment design
-
-The policy effects are small relative to the model's stochastic variation, so
-the design does most of the work in making them identifiable. Three choices
-matter, and `docs/methodology.md` explains each in full.
-
-**Shared spin-up, then fork.** Each seed is spun up once with no policy; the
-resulting model is deep-copied into a baseline arm and a policy arm. Both begin
-from a bit-identical microstate -- same agents, balances, houses and prices --
-so their difference isolates the intervention. Running two independent models
-per seed does *not* achieve this: the policy changes agent decisions in the
-first month, every later draw shifts, and the two arms end up as unrelated
-realisations that merely share a seed.
-
-**Window-averaged outcomes.** Outcomes are averaged over the measurement window
-rather than read off the final month. A single month's homeownership rate over
-a few hundred agents is close to one binomial draw.
-
-**Split RNG streams.** The exogenous interest-rate path and the demographic
-process draw from dedicated substreams, so those are identical across the two
-arms of a seed no matter what the policy does.
-
-Reported alongside every effect: the arm-to-arm correlation (the diagnostic for
-whether pairing is working), the achieved variance reduction, a bootstrap
-interval next to the normal-theory one, Holm-adjusted p-values across the full
-grid of policies x outcomes, and the minimum detectable effect -- so a null
-reads as a bound on the effect rather than as its absence.
+If you get an error that command pdflatex is not found, install with 
+```bash
+sudo apt install texlive-latex-base
+```
