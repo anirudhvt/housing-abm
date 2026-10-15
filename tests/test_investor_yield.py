@@ -95,14 +95,8 @@ def test_effective_yield_sell_equity_floored_above_zero():
 
 
 def test_omega_stays_inside_the_logistic_response_region():
-    """Regression: EQ 9/12 must not saturate the EQ 10/13 logistic.
-
-    beta = 50 is Baptista's calibration for a monthly-scale Omega. If Omega is
-    computed on an annual scale instead, beta*Omega lands around 10-12, where
-    the logistic is flat to ~1e-5 and no policy can move investor behaviour.
-    Across realistic market states |beta*Omega| must stay small enough that the
-    logistic still responds.
-    """
+    """Regression: Omega must be on the monthly scale beta = 50 assumes, or
+    the EQ 10/13 logistic saturates and no policy can move investors."""
     from housing_abm.equations.investor_probs import p_buy_investor
 
     beta = 50.0

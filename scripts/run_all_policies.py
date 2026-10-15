@@ -1,15 +1,5 @@
-"""Run every policy scenario against a shared baseline and compare them.
-
-Each seed is spun up once with no policy and forked into the two arms, so the
-comparison is paired on an identical microstate. The same spun-up seeds are
-reused across all six policies, which means the policies are compared to each
-other on common random numbers too, not just each to its own baseline.
-
-Family-wise error is controlled with Holm-Bonferroni across the full grid of
-policies x outcomes, and every null is reported with the effect size it was
-powered to detect, so "no effect" can be read as a bound rather than as an
-absence of evidence.
-"""
+"""Run all six policies against one shared baseline per seed, with
+Holm-adjusted p-values and minimum detectable effects."""
 
 import argparse
 import copy

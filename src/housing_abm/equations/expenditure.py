@@ -1,8 +1,6 @@
-"""EQ 3 (desired expenditure), EQ 4: (price appreciation expectatoins)
-Adaptions from Baptista et al. (2016):
-- investors subtitute income for capital
-- alpha and g are conmputed at census tract level
-- alpha_institutional > alpha_household (more deterministic)"""
+"""EQ 3 (desired expenditure) and EQ 4 (price appreciation expectation).
+Adaptations from Baptista et al. (2016): investors substitute capital for
+income, and g is computed per census tract."""
 
 import numpy as np
 
@@ -18,9 +16,8 @@ def desired_expenditure(
 ) -> float:
     """Eq 3: p_desired = alpha * y * exp(epsilon) / (1-beta*g)
 
-    'income or capital' is household income for households and available
-    fund capital for investors
-    'mortgage cap,' if provided, caps household's maximum loan + down payment (EQ 14)
+    income_or_capital: household income, or fund capital for investors
+    mortgage_cap: if given, caps the result at max loan + down payment (EQ 14)
     """
     epsilon = rng.normal(0, epsilon_std)
     p_desired = alpha * income_or_capital * np.exp(epsilon) / (1 - beta * g)
@@ -30,12 +27,8 @@ def desired_expenditure(
 
 
 def price_appreciation_expectation(hpi_history: list[float], alpha: float) -> float:
-    """EQ 4: g_t = alpha*[(h_t-1+h_t-2+h_t-3)/(h_t-13+h_t-14+h_t-15)-1].
-
-    hpi_history must contain 15 months of tract_level house price index values
-    most recent is the last
-    compute per census tract using assessor/ZHVI data
-    """
+    """EQ 4: g_t = alpha*[(h_t-1+h_t-2+h_t-3)/(h_t-13+h_t-14+h_t-15)-1],
+    clamped to [-0.03, 0.256]. hpi_history needs >= 15 values, most recent last."""
     if len(hpi_history) < 15:
         raise ValueError("hpi_history must contain at least 15 values")
     h_t_minus_1 = hpi_history[-1]
@@ -49,4 +42,4 @@ def price_appreciation_expectation(hpi_history: list[float], alpha: float) -> fl
         / (h_t_minus_13 + h_t_minus_14 + h_t_minus_15)
         - 1
     )
-    return max(min(g_t,0.256), -0.03)
+    return max(min(g_t, 0.256), -0.03)

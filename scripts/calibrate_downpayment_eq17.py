@@ -1,21 +1,6 @@
-"""Calibrate EQ17 (owner-occupier down payment) against the Atlanta HMDA
-loan-level data already checked into the repo (atlanta_hmda_2019.csv).
-
-housing_abm.equations.mortgage.estimate_floor_share_and_fit existed for
-exactly this purpose but was never actually invoked against real data --
-downpayment_eq17's first_time_buyer/repeat_buyer blocks in
-config/baseline_params.yaml carried no provenance comment, unlike
-tract_calibration/market_smoothing.
-
-HMDA has no first-time-vs-repeat-buyer flag, so this uses loan_type as a
-proxy: FHA (loan_type == 2) for first-time buyers, conventional
-(loan_type == 1) for repeat buyers -- FHA's 3.5% minimum down payment and
-looser credit terms make it the buyer-type split that actually exists in
-the data, but it is a proxy, not a direct field. A repeat buyer can use FHA
-and a first-time buyer can use a low-down-payment conventional program
-(HomeReady/Home Possible), so this should be read as the best available
-split, not ground truth. Print output only -- baseline_params.yaml is
-updated by hand once the numbers are reviewed, not by this script.
+"""Calibrate EQ 17 (owner down payment) from atlanta_hmda_2019.csv, using FHA
+vs. conventional loans as a proxy for first-time vs. repeat buyers (HMDA has no
+first-time-buyer flag). Prints fits only; update baseline_params.yaml by hand.
 """
 
 import sys

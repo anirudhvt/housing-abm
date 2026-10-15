@@ -1,13 +1,5 @@
-"""Paired Monte Carlo policy comparison.
-
-For each seed the model is spun up once with no policy, then forked: one copy
-runs on unchanged, the other has the policy switched on. Both arms therefore
-start from a bit-identical microstate, which is what makes the paired
-difference a low-variance estimate of the policy effect. Outcomes are averaged
-over the measurement window rather than read off the final month.
-
-See housing_abm.experiment for why the design differs from a naive two-arm run.
-"""
+"""Paired Monte Carlo comparison of one policy against baseline
+(see housing_abm.experiment for the design)."""
 
 import argparse
 import json

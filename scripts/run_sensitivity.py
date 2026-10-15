@@ -1,22 +1,5 @@
-"""Sensitivity of the policy ranking to uncertain parameters.
-
-Sweeps parameters that could not be estimated from data and re-runs the full
-paired comparison at each value, so the question answered is whether the
-*ranking* of policies survives parameter uncertainty, not just whether any one
-effect changes size.
-
-The sweep now uses the same paired design as the main study: one spin-up per
-(parameter value, seed), forked into baseline and policy arms, with outcomes
-averaged over the measurement window. Running each arm independently -- as the
-previous version did -- meant every cell of the sweep carried the full
-unpaired Monte Carlo noise, which at these effect sizes was larger than the
-parameter sensitivity being measured.
-
-beta_institutional is the parameter that most deserves this treatment: it is
-the shape parameter of the EQ 10/13 logistic, and how much any financial
-penalty can move investor behaviour depends directly on where on that logistic
-the market sits.
-"""
+"""Sweep uncalibrated parameters and re-run the paired policy comparison at
+each value, to test whether the policy ranking survives."""
 
 import argparse
 import copy

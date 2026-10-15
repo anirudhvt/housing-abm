@@ -1,17 +1,4 @@
-"""Tests for Tract's rent formation -- the rent-side mirror of
-test_tract_price_formation.py.
-
-Before this mechanism existed, rent_per_quality was set once from config and
-never updated by the rental market (measured: exactly one value across 240
-simulated months). Since that number is the market signal read by EQ5's
-buy-vs-rent decision, EQ9/12's investor yield, EQ11's rent setting and the
-investor yield ranking, the reference's stabilising loop could not operate.
-See docs/reference_gap_analysis.md Problem 1.
-
-These tests pin the two stages' arithmetic directly, independent of the full
-model, and guard the specific failure mode that motivated the work: a rent
-level that cannot respond to the rental market at all.
-"""
+"""Tests for Tract's rent formation, the rent-side mirror of price formation."""
 
 import pytest
 

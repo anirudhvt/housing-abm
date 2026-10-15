@@ -1,11 +1,12 @@
-import os
+"""Pull ACS 2019 5-year tract data (B25024, B25003, B19001, B25004) for the
+Atlanta metro and merge it into atlanta_master_tract_2019.csv."""
 
+import os
 
 import pandas as pd
 from census import Census
 from us import states
 
-# Census API key
 API_KEY = os.environ.get("CENSUS_API_KEY")
 
 # ACS 2019 5-year
@@ -13,8 +14,7 @@ c = Census(API_KEY, year=2019)
 
 GA_FIPS = states.GA.fips
 
-# Atlanta metro counties
-# Henry, Rockdale, Newton, Coweta, Forsyth, Paulding, Spalding, Walton
+# seven core Atlanta metro counties
 ATLANTA_COUNTIES = [
     "067",  # Cobb
     "089",  # DeKalb

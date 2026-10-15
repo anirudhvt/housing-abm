@@ -1,22 +1,9 @@
-"""Diagnostics for the experiment design itself, not for any one policy.
-
-Two questions decide how tight the reported intervals can be, and neither was
-being checked:
-
-1. Is the baseline stationary over the measurement window? If the model is
-   still drifting, every seed is measured at a different point on its own
-   trajectory, and that spread enters the cross-seed standard deviation as
-   pure noise. It also makes the validation table incomparable to the policy
-   runs when the two use different spin-up lengths.
-
-2. How long should the measurement window be? Longer windows average away more
-   within-run noise, but the two arms of a paired comparison drift apart as
-   they run, so the common-random-numbers correlation decays. The standard
-   error of the paired effect is minimised somewhere in between, and that
-   optimum is worth locating rather than guessing.
+"""Experiment-design diagnostics: is the baseline stationary over the
+measurement window, and which window length minimises the paired standard error?
 """
 
 import argparse
+import copy
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -57,8 +44,6 @@ def _baseline_series(job):
 def _paired_series(job):
     seed, households, spinup, months, policy, config = job
     spun = build_and_spinup(seed, households, spinup, config)
-    import copy
-
     base = copy.deepcopy(spun)
     treated = fork_with_policy(spun, [policy])
     return run_window(base, months), run_window(treated, months)

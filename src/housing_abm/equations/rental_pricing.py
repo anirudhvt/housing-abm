@@ -1,4 +1,4 @@
-"""EQ 11: rental pricing, differentiated by landlord type (adaption)"""
+"""EQ 11 rental pricing, differentiated by landlord type, and lease lengths."""
 
 import numpy as np
 
@@ -14,12 +14,10 @@ def small_landlord_rent(
     previous_rent: float | None,
     rng: np.random.Generator,
 ) -> float:
-    """Small landlords: EQ 11, but chance of stickiness - reprice with reprice_prob
-    otherwise relist at previous rent
-    """
+    """EQ 11 with stickiness: reprice with probability reprice_prob, otherwise
+    keep the previous rent."""
     if previous_rent is not None and rng.random() >= reprice_prob:
         return previous_rent
-    # Calculate new rent based on the tract-level average and other parameters
     epsilon = rng.normal(0, epsilon_std)
     ln_q = (
         alpha + np.log(r_bar_tract) - beta * np.log(zeta * (1 + f_bar_tract)) + epsilon
@@ -28,19 +26,13 @@ def small_landlord_rent(
 
 
 def institutional_rent(market_rate: float, premium: float = 1.04) -> float:
-    """Institutional: always market rate + premium (~4%)
-    skip noise of EQ 11 - no stickiness, due to algorithmic tools (RealPage)"""
+    """Market rate plus a premium, no noise or stickiness (algorithmic pricing)."""
     return market_rate * premium
 
 
 def sample_lease_length(rng: np.random.Generator) -> int:
-    """Samples lease term in months
-    Uses national BLS CPI Housing Survey
-    59.6% 12-month, 31.8 month-to-month, 8.6% other (split into 24-month, 13-month, 6-month)
-    remaining other folded into 12-month for simplicty
-    TODO: replace with atlanta specific if becomes available
-
-    month-to-month represented at 1-month term"""
+    """Lease term in months from the national BLS CPI Housing Survey mix
+    (month-to-month = 1). TODO: Atlanta-specific data if available."""
 
     r = rng.random()
     if r < 0.318:

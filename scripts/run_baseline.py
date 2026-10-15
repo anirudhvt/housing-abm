@@ -1,5 +1,4 @@
-"""Run model for N months and plot all core indicators tracked by the
-model's DataCollector."""
+"""Run one baseline simulation and plot the DataCollector indicators."""
 
 import matplotlib.pyplot as plt
 

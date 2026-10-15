@@ -1,25 +1,5 @@
-"""Price-sorted offer book with prefix-argmax lookup.
-
-Phase 1 of the double auction has every remaining bid pick its preferred
-affordable offer. Written directly that is a scan over all offers for every
-bid, so the clearing step costs O(bids x offers) per round -- quadratic in
-population, and quadratic with a large constant, since the scan also ran the
-per-unit policy predicate for every (bid, offer) pair.
-
-That cost is what pinned the study at 300 households, where the binomial noise
-on a rate computed over a few hundred agents is the same order as the policy
-effects being estimated. Population is the most direct lever on that noise, so
-the matching step needs to not be quadratic.
-
-Offers are sorted by price once per round with a running argmax of the
-preference key. A bid's preferred offer is then a binary search for its budget
-followed by one array lookup: O(log n) per bid instead of O(n).
-
-Ties in the preference key -- common, because the construction sector emits
-units at exactly quality 1.0 -- are broken by a per-round random jitter drawn
-from the model RNG, which reproduces the uniform random tie-break the previous
-implementation did explicitly.
-"""
+"""Price-sorted offer book with a running argmax of the preference key, so each
+bid finds its best affordable offer in O(log n). Ties are broken by random jitter."""
 
 from bisect import bisect_right
 
@@ -31,8 +11,7 @@ class OfferBook:
             price = getattr(unit, price_attr)
             if price is None:
                 continue
-            # (key, jitter) makes the ordering total, so the argmax is unique
-            # and uniformly distributed among genuine ties
+            # random jitter breaks ties in the preference key uniformly
             decorated.append((price, key_fn(unit), rng.random(), unit))
         decorated.sort(key=lambda row: row[0])
 
@@ -52,11 +31,8 @@ class OfferBook:
         return len(self.units)
 
     def best_affordable(self, max_price, exclude_owner=None, excluded=None):
-        """Highest-preference offer priced at or below max_price.
-
-        exclude_owner skips listings the bidder owns; excluded skips a set of
-        units the bidder has already been outbid on this month.
-        """
+        """Highest-preference offer priced at or below max_price, skipping the
+        bidder's own listings and any units in `excluded`."""
         hi = bisect_right(self.prices, max_price) - 1
         if hi < 0:
             return None
@@ -69,8 +45,7 @@ class OfferBook:
         candidate = self.units[self.argmax[hi]]
         if not blocked(candidate):
             return candidate
-        # the top pick is blocked for this bidder specifically; rare, so a scan
-        # of the affordable prefix is cheap enough
+        # top pick is blocked for this bidder (rare): scan the affordable prefix
         best_unit = None
         best_key = None
         for i in range(hi + 1):

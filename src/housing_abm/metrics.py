@@ -1,17 +1,5 @@
-"""Outcome metrics for the policy experiments.
-
-The original harness read every outcome from a single terminal snapshot: one
-month's homeownership rate, one month's rental vacancy rate. With a few hundred
-agents that snapshot is close to a single binomial draw, so its cross-seed
-standard deviation is dominated by sampling noise that has nothing to do with
-the policy under test. Averaging the same quantity over the measurement window
-uses all the information the run already produced, and cuts the standard error
-by roughly the square root of the number of effectively independent months.
-
-Everything here reads from a per-month record collected during the run, so a
-single simulation yields both the window mean and the within-run series needed
-for stationarity diagnostics.
-"""
+"""Outcome metrics: recorded every month, then summarised as averages over the
+measurement window rather than read from the final month."""
 
 from __future__ import annotations
 
@@ -43,14 +31,8 @@ SECONDARY_METRICS = (
     "median_months_on_market",
 )
 
-# Metrics that are ratios of monthly counts.
-#
-# A handful of houses change hands each month, so the monthly first-time-buyer
-# share is a ratio of very small integers -- 0/2, 1/3, undefined -- and the
-# mean of those ratios is both extremely noisy and biased by the months with
-# few transactions. Aggregating numerator and denominator over the window
-# first gives the quantity actually of interest: the share of transactions in
-# the window won by first-time buyers.
+# Share metrics pooled over the window (sum numerator / sum denominator), since
+# monthly ratios of a handful of sales are noisy and often undefined.
 RATIO_METRICS = {
     "ftb_purchase_share": ("n_purchases_ftb", "n_purchases_total"),
     "repeat_buyer_purchase_share": ("n_purchases_repeat", "n_purchases_total"),
@@ -101,10 +83,7 @@ def observe(model) -> dict:
     prices = [u.price for u in model.housing_units if u.price]
     rents = [u.rent for u in model.rental_units if u.rent]
 
-    # sale-market liquidity. A healthy US market runs 3-6 months of inventory;
-    # this model clears far more slowly, which is a known limitation of the
-    # EQ 8 price-reduction rule at this population size, so it is measured and
-    # reported rather than left implicit.
+    # sale-market liquidity (real US markets run 3-6 months of inventory)
     listings = model.active_for_sale()
     sales = sum(model.purchases_this_month.values())
     months_on_market = [u.days_on_market for u in listings]
@@ -132,9 +111,7 @@ def observe(model) -> dict:
         "n_purchases_total": float(sum(model.purchases_this_month.values())),
         "median_price": float(np.median(prices)) if prices else None,
         "median_rent": float(np.median(rents)) if rents else None,
-        # the tract's own smoothed price index -- the cleanest series to read
-        # a price *trend* off, since it isn't re-sampled from whichever units
-        # happen to be listed this month (see price_cagr in window_means)
+        # smoothed tract price, used for the price_cagr trend
         "price_per_quality": float(model.tracts["tract_001"].price_per_quality),
         "n_households": float(model.n_household_agents()),
         "months_of_inventory": (len(listings) / sales) if sales else None,
@@ -156,26 +133,10 @@ def run_window(model, months: int) -> dict[str, list]:
 
 
 def price_trend_cagr(prices: list) -> float | None:
-    """Annualised price growth, as the OLS slope of log(price) on month index.
+    """Annualised price trend from the OLS slope of log(price) on month.
 
-    `annual_appreciation_g` is the *mean over months* of EQ4's ratio-based
-    trailing growth, which is the right quantity for agent behaviour (it is
-    what households actually perceive and act on) but a biased estimator of
-    the underlying trend. On a volatile mean-reverting series, growth ratios
-    are asymmetric: a rise from A to B reads as +(B-A)/A, while the matching
-    fall back to A reads as -(B-A)/B, which is smaller in magnitude. Averaged
-    over up-and-down cycles that yields a positive number even at zero net
-    trend, and the bias grows with volatility.
-
-    Measured at 300 households over a 180-month window, the gap is large and
-    one-directional: the mean of monthly EQ4 g came to +3.75%/yr against an
-    actual price CAGR of +0.99%/yr, overstating by +2.76%/yr in every one of
-    8 seeds (in two of them the price level *fell* over the window while the
-    metric still reported ~+3%/yr). So a trend target has to be validated
-    against a trend estimator, not against the behavioural signal.
-
-    Uses the log-OLS slope rather than an endpoint-to-endpoint CAGR, since it
-    uses the whole window instead of two noisy endpoint observations.
+    Use this, not the mean of EQ 4's g, to measure the trend: averaging growth
+    ratios over a volatile series biases upward.
     """
     clean = [p for p in prices if p is not None and not np.isnan(p) and p > 0]
     if len(clean) < 24:
@@ -215,12 +176,7 @@ def ratio_series(series: dict[str, list], name: str) -> list:
 
 
 def effective_sample_size(values) -> float:
-    """Months of independent information in an autocorrelated series.
-
-    n_eff = n * (1 - rho) / (1 + rho) for an AR(1) with lag-1 autocorrelation
-    rho. Used to report honestly how much a window average actually buys over
-    a single snapshot, rather than claiming the full month count.
-    """
+    """AR(1) effective sample size: n * (1 - rho) / (1 + rho)."""
     x = np.asarray([v for v in values if v is not None and not np.isnan(v)], dtype=float)
     n = x.size
     if n < 3:

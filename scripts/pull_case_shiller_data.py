@@ -1,13 +1,5 @@
-"""Pull the S&P/Case-Shiller Atlanta metro HPI from FRED and compute 
-Eq (4) trailing appreciation estimate 
-
-    g_t = alpha * ( (h_{t-1}+h_{t-2}+h_{t-3}) / (h_{t-13}+h_{t-14}+h_{t-15}) - 1 )
-
-metro-level, not tract-level
-
-Series: ATXRSA (S&P/Case-Shiller GA-Atlanta Home Price Index, NSA, monthly,
-Jan 2000 = 100).
-"""
+"""Pull the Case-Shiller Atlanta HPI (FRED series ATXRSA) and compute the
+metro-level EQ 4 trailing appreciation g."""
 
 import argparse
 import os

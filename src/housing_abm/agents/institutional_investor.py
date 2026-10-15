@@ -1,8 +1,6 @@
-"""Institutional Investor agent: appreciation focused (delta = 0.6)
-Capital constrained rather than income, prices at market value
-subject to policy restrictions"""
+"""Institutional investor: appreciation focused (delta = 0.6), capital- rather
+than income-constrained, and prices rents at market plus a premium."""
 
-from housing_abm.equations.expenditure import price_appreciation_expectation
 from housing_abm.equations.investor_probs import p_buy_investor, p_sell_investor
 from housing_abm.equations.investor_yield import (
     effective_yield_sell,
@@ -25,16 +23,21 @@ class InstitutionalInvestor(HouseholdAgent):
     LOAN_TYPE = "investor_dscr"
     DELTA = 0.6
 
+    @property
+    def delta(self) -> float:
+        """EQ 9/12 weight on capital gain; config delta_institutional overrides DELTA."""
+        return self.model.params["investor_yield_eq9_eq12"].get("delta_institutional", self.DELTA)
+
     def __init__(self, model, available_capital: float, tract_id: str):
-        # income/age don't apply, we override EQ 1/2
+        # income/age don't apply; EQ 1/2 are overridden
         super().__init__(model, income=1.0, age=None, tract_id=tract_id)
-        self.available_capital = available_capital  # in place of income
+        self.available_capital = available_capital
         self.properties = []
-        self.house_to_sell = None  # unused, kept for ownership market
+        self.house_to_sell = None  # unused; the ownership market expects it
 
     @property
     def bank_balance(self):
-        """rename bank_balance so that ownership_market functions"""
+        """Alias for available_capital, so shared market code works unchanged."""
         return self.available_capital
 
     @bank_balance.setter
@@ -45,33 +48,18 @@ class InstitutionalInvestor(HouseholdAgent):
         """EQ 1 doesn't apply: investors are capital constrained, not income"""
 
     def step(self):
-        net_rental_cash_flow = (
-            self._collect_rent_and_pay_mortgages()
-        )  # analogous to landlords, collect rent and pay mortgage
-        self.available_capital += net_rental_cash_flow  # add profit to balance
+        net_rental_cash_flow = self._collect_rent_and_pay_mortgages()
+        self.available_capital += net_rental_cash_flow
         self._distribute_to_shareholders(net_rental_cash_flow)
-        self.model.prevent_bankruptcy(self)  # inject cash to prevent bankruptcy
+        self.model.prevent_bankruptcy(self)
 
-        self._reprice_vacant_units()  # no stickiness
-        # see if they should buy or sell any houses
+        self._reprice_vacant_units()
         self._evaluate_sell_decision()
         self._evaluate_buy_decision()
 
     def _distribute_to_shareholders(self, net_cash_flow: float) -> None:
-        """Pay out a share of positive net cash flow, leaving the model.
-
-        Household agents are drained by EQ 2 consumption and small landlords
-        by the same rule, but institutional investors had no outflow of any
-        kind: every dollar of net rental income compounded into buying power
-        forever. That gives them an unbounded capital advantage over every
-        other agent, so their share of the rental stock climbs monotonically
-        (30% -> ~60% over a long run) and the model never reaches a stationary
-        ownership distribution.
-
-        Real single-family rental operators are largely REIT-structured and
-        must distribute the bulk of taxable income to shareholders, so a
-        payout ratio is both the realistic and the stabilising choice.
-        """
+        """Pay out a share of positive cash flow (REIT-style), so capital
+        doesn't compound without limit."""
         if net_cash_flow <= 0:
             return
         payout_ratio = self.model.params["investor_yield_eq9_eq12"].get(
@@ -82,32 +70,28 @@ class InstitutionalInvestor(HouseholdAgent):
     def _collect_rent_and_pay_mortgages(self) -> float:
         total_rent = sum(
             u.rent or 0.0 for u in self.properties if u.tenant is not None
-        )  # only collect rent if someone lives there
-        total_mortgage = sum(
-            u.mortgage_payment or 0.0 for u in self.properties
-        )  # pay all mortgages
-        return total_rent - total_mortgage  # could be negative
+        )
+        total_mortgage = sum(u.mortgage_payment or 0.0 for u in self.properties)
+        return total_rent - total_mortgage
 
     def _reprice_vacant_units(self):
-        # instead of stickiness, due to programs used by investors they reprice at market rate
+        """Algorithmic pricing: vacant units always reset to market rent + premium."""
         premium = self.model.params["rental_pricing_eq11"]["institutional"]["premium"]
         for unit in self.properties:
-            if unit.on_rental_market and unit.tenant is None:  # currently selling
+            if unit.on_rental_market and unit.tenant is None:
                 tract = self.model.tracts[unit.tract_id]
                 market_rate = tract.rent_per_quality * unit.quality
-                unit.rent = institutional_rent(
-                    market_rate, premium=premium
-                )  # reprice at market rate + premium
+                unit.rent = institutional_rent(market_rate, premium=premium)
 
     def _evaluate_sell_decision(self):
-        """copy as before/small landlord"""
+        """EQ 12/13: sell vacant units based on effective yield."""
         yield_cfg = self.model.params["investor_yield_eq9_eq12"]
         prob_cfg = self.model.params["investor_probs_eq10_eq13"]
-        for unit in list(self.properties):  # see if they should sell any unit
-            if unit.on_sale_market:  # already on sale, ignore
+        for unit in list(self.properties):
+            if unit.on_sale_market:
                 continue
             if unit.tenant is not None:
-                continue  # wait until vacant
+                continue  # only sell once the lease ends
             tract = self.model.tracts[unit.tract_id]
             current_value = tract.avg_sold_price(unit.quality)
             equity = current_value - unit.mortgage_principal
@@ -116,7 +100,7 @@ class InstitutionalInvestor(HouseholdAgent):
             psi = effective_yield_sell(
                 price=current_value,
                 equity=equity,
-                delta=self.DELTA,
+                delta=self.delta,
                 g=g,
                 kappa=yield_cfg["kappa"],
                 r_bar=tract.gross_rental_yield(),
@@ -135,15 +119,12 @@ class InstitutionalInvestor(HouseholdAgent):
                     epsilon_std=asking_cfg["epsilon_std"],
                     rng=self.model.random_gen,
                 )
-                unit.price = max(
-                    unit.price, unit.mortgage_principal
-                )  # see repeat_buyer.py comment
+                unit.price = max(unit.price, unit.mortgage_principal)
                 unit.on_rental_market = False
                 self.model.list_for_sale(unit, seller=self)
 
     def _evaluate_buy_decision(self):
-        # see if they should buy, subject to policy restrictions
-        # uses investor parameters
+        """EQ 9/10: expected yield -> purchase probability -> ownership bid."""
         yield_cfg = self.model.params["investor_yield_eq9_eq12"]
         prob_cfg = self.model.params["investor_probs_eq10_eq13"]
         down_cfg = self.model.params["downpayment_eq18"]["institutional"]
@@ -153,7 +134,6 @@ class InstitutionalInvestor(HouseholdAgent):
         tract = self.model.tracts[self.tract_id]
         target_price = tract.price_per_quality
         g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_institutional"])
-
 
         down_payment, is_cash = down_payment_investor(
             price=target_price,
@@ -166,9 +146,7 @@ class InstitutionalInvestor(HouseholdAgent):
             rng=self.model.random_gen,
         )
         down_payment = min(down_payment, target_price)
-        # a purchase tax raises the cash the investor must put up for the same
-        # asset, which lowers EQ 9 leverage; the return still accrues on the
-        # market value, not the taxed price
+        # purchase tax raises the cash outlay; returns still accrue on market value
         tax_multiplier = acquisition_price_multiplier(self.model, self)
         cash_outlay = down_payment + (tax_multiplier - 1.0) * target_price
         if self.available_capital < cash_outlay:
@@ -198,7 +176,7 @@ class InstitutionalInvestor(HouseholdAgent):
         omega = expected_yield_buy(
             price=target_price,
             down_payment=cash_outlay,
-            delta=self.DELTA,
+            delta=self.delta,
             g=g,
             kappa=yield_cfg["kappa"],
             r_bar=tract.gross_rental_yield(),

@@ -1,14 +1,6 @@
-"""Calibrate four Atlanta model inputs from the Survey of Consumer Finances
-(SCF) Summary Extract Public Data -- the closest US analogue to the
-reference Java model's single-source calibration survey (the UK's Wealth
-and Assets Survey), which grounds age, income-given-age, wealth-given-
-income, and investor propensity all from one panel. See
-docs/methodology.md Section 11 for the write-up.
-
-SCF stores 5 multiple-imputation "implicates" per household (Y1's last
-digit); this uses implicate 1 only, a standard simplification for building
-a population-level empirical distribution (not full MI variance
-estimation, which isn't the goal here).
+"""Calibrate age, income-by-age, EQ 1 wealth-by-income and small-landlord
+propensity from the SCF Summary Extract (implicate 1 only).
+See docs/methodology.md Section 11.
 
 Usage:
     python scripts/calibrate_scf.py path/to/SCFP2022.csv
@@ -67,10 +59,7 @@ def main():
         print(f"  {b}: mean=${mean_inc:,.0f}  median=${med_inc:,.0f}  n={len(group)}")
 
     # --- 3. Wealth given income (EQ1: ln(bank_balance) = alpha + beta*ln(income)) ---
-    # FIN (total financial assets) used as the "bank_balance" analogue --
-    # readily liquidated wealth, unlike NETWORTH which includes illiquid
-    # home/business equity a household wouldn't draw on for a down payment
-    # or day-to-day consumption smoothing.
+    # FIN (liquid financial assets) stands in for bank_balance
     print("\n=== EQ1 fit: ln(FIN) ~ alpha + beta*ln(INCOME) ===")
     print("(SCF has no first-time-vs-repeat-buyer flag, same limitation as HMDA --")
     print(" owner-occupiers reported as one combined group, not split like config's")
@@ -95,12 +84,8 @@ def main():
         )
 
     # --- 4. Investor propensity by income percentile -----------------------
-    # HORESRE==1 (owns other residential real estate) as the BTL/investor
-    # flag -- the direct US analogue of WAS's rental-income question. SCF
-    # surveys individual households, so by construction this can only ever
-    # capture "mom and pop" landlords, not institutional/LLC-held
-    # portfolios -- consistent with the earlier finding that institutional
-    # investor share has no free US survey analogue at all.
+    # HORESRE==1 (owns other residential real estate); households only, so
+    # this covers small landlords, not institutional investors
     print("\n=== Investor (small-landlord) propensity by income decile ===")
     df["income_decile"] = pd.qcut(df["INCOME"].rank(method="first"), 10, labels=False)
     for decile, g in df.groupby("income_decile", observed=True):

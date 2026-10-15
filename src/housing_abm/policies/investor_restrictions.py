@@ -1,5 +1,4 @@
-"""six investor-restriction policies 
-
+"""Investor-restriction policies. Config shapes:
 
   - type: waiting_period
     days: 60
@@ -57,11 +56,7 @@ def _applies(policy: dict, agent) -> bool:
 
 
 def _policies_of_type(model, policy_type: str) -> list[dict]:
-    """Policies of one type, indexed once per model rather than re-scanned.
-
-    This is called inside the per-bid/per-unit matching loops, which made it
-    one of the hottest functions in the whole simulation.
-    """
+    """Policies of one type, from an index built once per model (hot path)."""
     index = getattr(model, "_policy_type_index", None)
     if index is None:
         index = {}
@@ -84,14 +79,8 @@ def has_unit_level_policies(model) -> bool:
 
 
 def eligible_units_for_tag(model, tag, units):
-    """Units an agent carrying `tag` may bid on, under unit-level policies.
-
-    The waiting-period and geographic restrictions depend only on the agent's
-    class and the unit, never on the individual agent, so eligibility can be
-    resolved once per class per round instead of once per (bid, unit) pair.
-    In the hot matching loop that difference was tens of millions of predicate
-    evaluations per run.
-    """
+    """Units an agent class may bid on under waiting-period and geographic
+    restrictions (resolved once per class per round)."""
     DAYS = DAYS_PER_MODEL_STEP
     thresholds = [
         p["days"] / DAYS
@@ -121,26 +110,9 @@ def agent_policy_tag(agent):
     return _agent_tag(agent)
 
 
-def passes_unit_level_policies(model, agent, unit) -> bool:
-    """call this alongside the existing max_price/ownership check when
-    building each bid's `affordable` list in run_ownership_market.
-    Returns True if `agent` is allowed to buy `unit` under all active
-    waiting_period and geographic_restriction policies.
-
-    """
-    for policy in _policies_of_type(model, "waiting_period"):
-        if not _applies(policy, agent):
-            continue
-        threshold_in_model_steps = policy["days"] / DAYS_PER_MODEL_STEP
-        if unit.days_on_market < threshold_in_model_steps:
-            return False
-    for policy in _policies_of_type(model, "geographic_restriction"):
-        if _applies(policy, agent) and unit.tract_id in policy.get("restricted_tracts", []):
-            return False
-    return True
-
-
-#ownership cap
+# ---------------------------------------------------------------------------
+# ownership_cap
+# ---------------------------------------------------------------------------
 
 def _get_or_init_soft_cap_state(model, policy: dict) -> dict:
 
@@ -160,9 +132,8 @@ def _get_or_init_soft_cap_state(model, policy: dict) -> dict:
 
 
 def filter_ownership_cap_bids(model):
-    """Call once per month, before ownership-market matching - removes bids from investors who would
-    exceed an active ownership_cap policy's max_units_absolute.
-    """
+    """Before matching, drop bids from investors at the cap (hard), or keep
+    them with the adaptive allowed probability (soft)."""
     for policy in _policies_of_type(model, "ownership_cap"):
         max_units = policy["max_units_absolute"]
         enforcement = policy.get("enforcement", "hard")
@@ -179,23 +150,20 @@ def filter_ownership_cap_bids(model):
                 continue
 
             if enforcement == "hard":
-                continue  # drop the bid entirely
+                continue
 
-            # soft mode: keep the bid with the currently adapted probability
             state = _get_or_init_soft_cap_state(model, policy)
             state["n_total_this_month"] += 1
             if model.random_gen.random() < state["allowed_prob"]:
                 state["n_over_cap_this_month"] += 1
                 surviving_bids.append(bid)
-            # else: dropped this round, agent can try again next month
 
         model._ownership_bid_queue = surviving_bids
 
 
 def update_ownership_cap_soft_state(model):
-    """Call once per month (end of step, after ownership market clears
-    Updates proportions 
-    """
+    """End of month: nudge the soft cap's allowed probability toward the
+    target exceedance share over the trailing window."""
     for policy in _policies_of_type(model, "ownership_cap"):
         if policy.get("enforcement") != "soft":
             continue
@@ -216,8 +184,8 @@ def update_ownership_cap_soft_state(model):
 
 
 def apply_forced_divestiture(model):
-    """Hard-mode ownership_cap: force list excess units for sale. =
-    """
+    """Hard ownership cap: list excess vacant units for sale. Occupied units
+    wait for their lease to end."""
     for policy in _policies_of_type(model, "ownership_cap"):
         if policy.get("enforcement", "hard") != "hard":
             continue
@@ -228,16 +196,14 @@ def apply_forced_divestiture(model):
             excess = len(agent.properties) - max_units
             if excess <= 0:
                 continue
-            # force-list the excess units with the shortest remaining tenancy
-            # first (least disruptive to sitting tenants) - vacant units first,
-            # then occupied ones if still over the cap
+            # vacant units first
             candidates = sorted(
                 (u for u in agent.properties if not u.on_sale_market),
                 key=lambda u: (u.tenant is not None, getattr(u, "days_on_market", 0)),
             )
             for unit in candidates[:excess]:
                 if unit.tenant is not None:
-                    continue  # don't evict; wait for lease to end naturally
+                    continue  # never evict
                 tract = model.tracts[unit.tract_id]
                 unit.price = tract.avg_sold_price(unit.quality)
                 unit.price = max(unit.price, unit.mortgage_principal)
@@ -246,8 +212,8 @@ def apply_forced_divestiture(model):
 
 
 # ---------------------------------------------------------------------------
-# purchase_tax, vacancy_tax, portfolio_tax: all three feed into a single
-# policy_cost figure subtracted directly from Omega/Psi (Eq 9/12) 
+# taxes: vacancy and portfolio taxes are holding costs subtracted from EQ 9/12;
+# the purchase tax raises the cash outlay at acquisition
 # ---------------------------------------------------------------------------
 
 def _portfolio_tax_rate(brackets: list[dict], n_units: int) -> float:
@@ -259,36 +225,21 @@ def _portfolio_tax_rate(brackets: list[dict], n_units: int) -> float:
 
 
 def compute_policy_cost(model, agent) -> float:
-    """Recurring policy cost on this agent's yield, as an annual rate.
-
-    Only *holding* costs belong here. The purchase tax used to be included,
-    which meant it was subtracted from EQ 12 as well as EQ 9 -- that is, a tax
-    on acquiring a home also reduced the effective yield on homes the investor
-    already owned, and so raised their probability of selling. The scenario
-    therefore made investors churn their portfolios rather than deterring
-    acquisition, and investor purchases went *up* under the tax. A purchase
-    tax is a one-off transaction cost at acquisition; it is applied in
-    acquisition_price_multiplier below, where it belongs.
-    """
+    """Annual holding cost (vacancy + portfolio tax) on this agent's yield.
+    The purchase tax is excluded; see acquisition_price_multiplier."""
     total = 0.0
 
     for policy in _policies_of_type(model, "vacancy_tax"):
         if not _applies(policy, agent):
             continue
-        # HousingUnit.day_vacant is incremented once per model step, and a
-        # step is one month -- so it counts months, not days. Comparing it
-        # directly against vacancy_threshold_days meant a "90 day" grace
-        # period was enforced as 90 months (7.5 years), and the vacancy tax
-        # essentially never bound on any unit.
+        # day_vacant counts months, so convert the threshold from days
         threshold_months = policy.get("vacancy_threshold_days", 90) / DAYS_PER_MODEL_STEP
         n_vacant_over_threshold = sum(
             1 for u in agent.properties
             if u.tenant is None and getattr(u, "day_vacant", 0) >= threshold_months
         )
         if n_vacant_over_threshold > 0 and agent.properties:
-            # scale the annual rate by the share of the portfolio sitting
-            # vacant past the threshold, rather than applying it flat
-            # regardless of how much of the portfolio is actually vacant
+            # scaled by the share of the portfolio vacant past the threshold
             total += policy["annual_rate"] * (n_vacant_over_threshold / len(agent.properties))
 
     for policy in _policies_of_type(model, "portfolio_tax"):
@@ -299,15 +250,8 @@ def compute_policy_cost(model, agent) -> float:
 
 
 def acquisition_price_multiplier(model, agent) -> float:
-    """Factor by which a purchase tax raises an investor's cash outlay.
-
-    The paper specifies this policy as "the effective purchase price for
-    investors is increased by the tax rate, reducing the expected yield on
-    potential acquisitions". The return still accrues on the asset's market
-    value, but the investor has to put up (1 + rate) times the cash, so the
-    tax enters EQ 9 by inflating the down payment rather than as a flat
-    subtraction from the yield.
-    """
+    """1 + purchase tax rate. The tax raises the investor's cash outlay in EQ 9,
+    while the return still accrues on market value."""
     multiplier = 1.0
     for policy in _policies_of_type(model, "purchase_tax"):
         if _applies(policy, agent):

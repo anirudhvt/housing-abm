@@ -1,12 +1,4 @@
-"""Tests for price_trend_cagr, the trend estimator used to validate the
-model's price growth.
-
-Exists because `annual_appreciation_g` -- the mean over months of EQ4's
-ratio-based trailing growth -- is a biased estimator of the underlying
-trend on a volatile mean-reverting series, and was failing the validation
-band for that reason rather than because of the model's actual price
-behaviour. See housing_abm.metrics.price_trend_cagr for the measurement.
-"""
+"""Tests for price_trend_cagr, the log-OLS trend used to validate price growth."""
 
 import numpy as np
 import pytest

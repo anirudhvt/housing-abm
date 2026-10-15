@@ -1,6 +1,5 @@
-"""EQ 16: morgage rate = exogenous bank rate + endogenous spread
-Spread adjusts monthly based on new mortgage lending relative to target supply
-lending above target pushes spread and rate up (lower demand), vice versa"""
+"""EQ 16: mortgage rate = exogenous base rate + a spread that rises when monthly
+lending exceeds target supply and falls when it is below."""
 
 
 def update_mortgage_rate(model):

@@ -1,11 +1,6 @@
-""" "Multi round double auction market clearing, shared by both market
-Per round:
-    Phase 1: every remaining bid matched to best offer it can afford -
-    highest quality/highest expected gross rental yield
-    Phase 2: offer matched to one bid sells at asking price
-    offer matched to multiple bids gets bid up, people who can still afford are randomly chosen
-
-Unmatched bids return to pool for another round, up to max_rounds cap"""
+"""Helpers for the multi-round double auction used by both markets. Each round,
+bids claim their preferred affordable offer; contested offers are bid up and
+go to a random bidder who can still afford them."""
 
 import numpy as np
 
@@ -30,13 +25,8 @@ def sample_bid_up_multiplier(
     month_days: float = 30.0,
     max_multiplier: float = 3.0,
 ) -> float:
-    """EQ21: multiply asking price by 1.0075^k, k drawn from a geometric
-    distribution
-    b = n_bids.
-    Approximates bids arriving on random days within the month, each new bid
-    within a 7-day window of the previous one bidding the price up 0.75%.
-    max_multiplier caps how far a single round can bid a price up
-    """
+    """EQ 21: price multiplier 1.0075^(k-1), with k geometric in n_bids,
+    capped at max_multiplier."""
     if n_bids <= 1:
         return 1.0
     p = np.exp(-arrival_window_days * n_bids / month_days)
@@ -48,15 +38,7 @@ def sample_bid_up_multiplier(
 
 
 def max_rounds(n_bids: int, n_offers: int, n_households: int, round_floor: int) -> int:
-    """max rounds formula, floored with placeholder param"""
+    """The paper's round count, floored at round_floor."""
     n_orders = n_bids + n_offers
     paper_formula = min(n_households / 1000.0, 1.0 + n_orders / 5_000_000.0)
-    return max(round_floor, round(paper_formula))  # use paper's formula if big enough
-
-def pick_preferred(rng: np.random.Generator, candidates: list, key_fn) -> object:
-    """Pick highest key candidate, breaking ties randomly"""
-    best_key = max(key_fn(c) for c in candidates)
-    tied = [ c for c in candidates if key_fn(c) == best_key]
-    if len(tied) == 1:
-        return tied[0]
-    return tied[rng.integers(len(tied))]
+    return max(round_floor, round(paper_formula))

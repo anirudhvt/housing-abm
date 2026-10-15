@@ -1,6 +1,5 @@
-"""Load external (Zillow ZHVI/ZORI, or Case-Shiller) monthly series to
-replace internally-derived appreciation/rent-growth signals.
-"""
+"""Load external monthly series (Zillow ZHVI/ZORI or Case-Shiller) that can
+replace the model's own appreciation and rent-growth signals."""
 
 import csv
  

@@ -1,4 +1,5 @@
-# base code for all household agents
+"""Base class for household agents: EQ 1 desired balance and EQ 2 consumption."""
+
 from mesa import Agent
 
 from housing_abm.equations.wealth import desired_bank_balance, monthly_consumption
@@ -17,17 +18,14 @@ class HouseholdAgent(Agent):
             beta=4.0,
             epsilon_std=0.3,
             rng=self.model.random_gen,
-        )  # eq 1, updated periodically
-        self.status = "social_housing"  # or renting or owning
-        self.house = None  # reference to HousingUnit, if existing
-        self.owned_since_month = None  # month they became an owner, for repeat buyers
-        self.bridge_loan = 0.0  # down payment financed against unrealized equity, repaid when old house is sold
+        )  # placeholder until the first refresh_desired_balance()
+        self.status = "social_housing"  # or "renting" / "owning"
+        self.house = None
+        self.owned_since_month = None
+        self.bridge_loan = 0.0  # down payment financed against unsold equity
 
     def refresh_desired_balance(self):
-        """EQ 1: re-drawn each step - noise varies over time, "
-        income - wealth relationship stays fixed per agent type"""
-
-        # grabbing relevant parameters from the passed file
+        """EQ 1, re-drawn each step with fresh noise."""
         params = self.model.params["wealth_eq1"][self.WEALTH_KEY]
         self.desired_balance = desired_bank_balance(
             income=self.income,
@@ -38,10 +36,9 @@ class HouseholdAgent(Agent):
         )
 
     def apply_consumption(self, housing_cost: float):
-        """EQ 2: rent/mortgage netted out before consumption"""
+        """EQ 2, applied after rent/mortgage is paid."""
         alpha = self.model.params["consumption_eq2"]["alpha"]
         if housing_cost is None:
-            print(self.__class__.__name__, self.status, self.house, housing_cost)
             raise ValueError(
                 f"housing_cost is None for {self.__class__.__name__}, "
                 f"house={self.house}"
@@ -49,18 +46,14 @@ class HouseholdAgent(Agent):
                 f"status = {self.status}"
             )
 
-        # available money
         net_inflow = self.bank_balance + self.income - housing_cost
-        # use eq 2 from the equations folder
         consumption = monthly_consumption(net_inflow, self.desired_balance, alpha)
-        self.bank_balance = net_inflow - consumption  # update bank balance
-        self.model.prevent_bankruptcy(self)  # inject cash
+        self.bank_balance = net_inflow - consumption
+        self.model.prevent_bankruptcy(self)
         return consumption
 
     def essential_consumption(self) -> float:
-        """fixed subsistence floor, netted out before computing disposable income
-        config/baseline_params.yaml household_budget.essential_consumption_monthly
-        for calibration and current plcaeholder"""
+        """Fixed monthly subsistence spend, subtracted to get disposable income."""
         return self.model.params.get("household_budget", {}).get(
             "essential_consumption_monthly", 0.0
         )

@@ -1,13 +1,4 @@
-"""Tests for Tract's two-stage price formation (EMA + reversion-to-reference),
-ported from the reference Java model's HousingMarketStats.postClearingRecord.
-
-See config/baseline_params.yaml market_smoothing for the full rationale: a
-raw overwrite from a thin market's monthly sales is a noisy estimator whose
-jumps compound through the appreciation signal into a runaway price level.
-These tests pin the two stages' arithmetic directly, independent of the full
-model, so a regression there shows up as a small, readable failure rather
-than only surfacing as an implausible validation run months later.
-"""
+"""Tests for Tract's two-stage price formation (EMA + reversion to reference)."""
 
 import pytest
 
@@ -52,9 +43,7 @@ def test_reference_price_is_immutable_across_updates():
 
 
 def test_single_sale_at_reference_price_leaves_price_unchanged():
-    # a sale exactly at the reference level should be a no-op for both stages:
-    # EMA blends toward the same value, HPI blends toward 1.0 (already there),
-    # reversion targets reference * 1.0 (already there)
+    # a sale at the reference level is a no-op for both stages
     t = make_tract()
     t.record_sale(price=200_000.0, quality=1.0, days_on_market=10)
     t.update_hpi_history()
@@ -63,9 +52,7 @@ def test_single_sale_at_reference_price_leaves_price_unchanged():
 
 
 def test_one_outlier_sale_moves_price_by_less_than_the_raw_jump():
-    # a single sale at 3x reference in an otherwise dead market must not pull
-    # the smoothed price anywhere near 3x -- this is the exact failure mode
-    # that produced the runaway (see module docstring)
+    # one sale at 3x reference must be heavily damped
     t = make_tract(smoothing_factor=0.1091, price_decay=0.5)
     t.record_sale(price=600_000.0, quality=1.0, days_on_market=10)
     t.update_hpi_history()
@@ -75,11 +62,7 @@ def test_one_outlier_sale_moves_price_by_less_than_the_raw_jump():
 
 
 def test_house_price_index_is_smoothed_not_overwritten():
-    # confirms the fix for the bug found during implementation: an unsmoothed
-    # HPI computed from the same thin sample as the EMA effectively double-
-    # counts that sample's noise in the reversion step (stage 2 uses HPI at
-    # price_decay weight). With smoothing, one outlier month cannot set HPI
-    # outright.
+    # one outlier month must not set the HPI outright
     t = make_tract(smoothing_factor=0.1091, price_decay=0.5)
     t.house_price_index = 1.0
     t.record_sale(price=600_000.0, quality=1.0, days_on_market=10)  # 3x reference
@@ -88,9 +71,7 @@ def test_house_price_index_is_smoothed_not_overwritten():
 
 
 def test_repeated_sales_at_elevated_price_converge_hpi_toward_that_level():
-    # sustained (not one-off) transactions at a new level should still pull
-    # the smoothed series there over time -- the mechanism dampens noise, it
-    # doesn't freeze the price against real, persistent moves
+    # persistent moves still pull the series over time; only noise is damped
     t = make_tract(smoothing_factor=0.1091, price_decay=0.5)
     for _ in range(60):
         t.record_sale(price=400_000.0, quality=1.0, days_on_market=10)
@@ -116,10 +97,7 @@ def test_avg_sold_price_moves_with_price_per_quality_after_an_update():
 
 
 def test_smoothing_factor_derivation_matches_reference_constant():
-    # config/baseline_params.yaml documents smoothing_factor as derived from
-    # the reference model's CUMULATIVE_WEIGHT_BEYOND_YEAR=0.25 via
-    # 1 - 0.25**(1/12); pin the resulting numeric value so a future config
-    # edit can't silently drift from the documented derivation
+    # pin 1 - 0.25**(1/12), the reference model's CUMULATIVE_WEIGHT_BEYOND_YEAR
     cumulative_weight_beyond_year = 0.25
     smoothing_factor = 1.0 - cumulative_weight_beyond_year ** (1.0 / 12.0)
     assert smoothing_factor == pytest.approx(0.10910, abs=1e-4)

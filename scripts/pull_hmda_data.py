@@ -1,7 +1,5 @@
-"""Pull Atlanta HMDA loan-level data via public API 
-Feeds into: 
-EQ14: mortgage constraints
-EQ 17: FTB vs Repeat Buyer downpayment """
+"""Pull Atlanta HMDA loan-level purchase originations from the CFPB API
+(used to calibrate EQ 14 mortgage limits and EQ 17 down payments)."""
 
 import argparse
 import io
@@ -13,12 +11,9 @@ import requests
 
 API_URL = "https://ffiec.cfpb.gov/v2/data-browser-api/view/csv"
 
-#areas we are focused on 
 ATLANTA_COUNTIES = ["067", "089", "121", "135", "063", "151", "223"]
 GA_STATE_FIPS = "13"
 COUNTY_FIPS = [GA_STATE_FIPS + c for c in ATLANTA_COUNTIES]
-
-#data we want
 
 FIELDS = [
     "activity_year", "lei", "county_code", "census_tract",
@@ -27,15 +22,7 @@ FIELDS = [
     "income", "debt_to_income_ratio",
     "total_units", "purchaser_type", "applicant_credit_score_type",
     "interest_rate",
-    # Bucketed borrower age ("<25", "25-34", ..., ">74", or "8888" for not
-    # applicable), reported since the 2018 HMDA rule. Confirmed present in
-    # the live API response and verified populated with plausible values
-    # (see docs/methodology.md Section 10c). Feeds an age-conditioned
-    # LTV/LTI regression -- the Atlanta equivalent of the reference model's
-    # decideLTV() -- which the model currently has no analogue for at all
-    # (mortgage_terms.yaml uses flat regulatory LTV/DTI caps with no age
-    # term).
-    "applicant_age",
+    "applicant_age",  # bucketed; used by calibrate_ltv_by_age.py
 ]
 
 
@@ -49,8 +36,6 @@ def pull_year(year: int) -> pd.DataFrame:
     resp = requests.get(API_URL, params=params, timeout=120)
     if resp.status_code != 200:
         print(resp.text)
-    resp.raise_for_status()
-    
     resp.raise_for_status()
     df = pd.read_csv(io.StringIO(resp.text), low_memory=False)
     keep = [c for c in FIELDS if c in df.columns]

@@ -1,23 +1,8 @@
-"""Calibrate EQ17 (owner-occupier down payment) against Fannie Mae's
-Single-Family Loan Performance Data, filtered to the Atlanta MSA.
-
-Unlike scripts/calibrate_downpayment_eq17.py (which proxies first-time vs.
-repeat buyer with HMDA's loan_type field, since HMDA carries no direct
-first-time-buyer flag), this dataset has a genuine First Time Home Buyer
-Indicator (Y/N) reported at origination -- see docs/methodology.md Section
-10a for why that proxy mattered enough to verify against the real thing.
-
-Schema: pipe-delimited, no header, one row per loan per reporting month.
-Field positions below were verified against Fannie Mae's own "Single-Family
-Loan Performance Dataset and Credit Risk Transfer - Glossary and File
-Layout" (current as of the 5/26/2026 revision) and cross-checked field by
-field against a real sample row -- see the session's diagnostic output.
-Position N in that document is FIELDS[N-1] here (0-indexed).
+"""Calibrate EQ 17 (owner down payment) from Fannie Mae Single-Family Loan
+Performance Data for the Atlanta MSA, split on its real first-time-buyer flag.
 
 Usage:
-    python scripts/calibrate_downpayment_eq17_fnma.py path/to/quarter_file.csv [...]
-
-Accepts one or more quarterly files (or the sample file, for a dry run).
+    python scripts/calibrate_downpayment_eq17_fnma.py quarter_file.csv [...]
 """
 
 import sys
@@ -29,9 +14,7 @@ from housing_abm.equations.mortgage import estimate_floor_share_and_fit  # noqa:
 
 ATLANTA_MSA_CODE = "12060"
 
-# 0-indexed position = glossary Field Position - 1. Trailing fields (109+)
-# are omitted since nothing here needs them and some file vintages don't
-# carry that many columns.
+# glossary field position N is FIELDS[N-1]; only the first 33 fields are needed
 FIELDS = [
     "reference_pool_id", "loan_id", "reporting_period", "channel",       # 1-4
     "seller_name", "servicer_name", "master_servicer",                    # 5-7

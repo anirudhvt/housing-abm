@@ -1,13 +1,5 @@
-"""Calibrate an age-conditioned LTV/LTI curve from real Atlanta HMDA data --
-the Atlanta equivalent of the reference Java model's decideLTV(), which the
-model currently has no analogue for at all: mortgage_terms.yaml uses flat
-regulatory LTV/DTI caps (FHA 96.5%, conventional 80%) with no age term.
-
-HMDA carries no first-time-vs-repeat-buyer flag (see
-calibrate_downpayment_eq17.py and docs/methodology.md Section 10a/10b for
-where that split is handled instead, via Fannie Mae's genuine FTB flag).
-This fits a single pooled regression across all owner-occupied purchase
-loans instead of splitting by buyer type.
+"""Fit LTV and LTI against borrower age from Atlanta HMDA owner-occupied loans
+(an analogue of the reference model's decideLTV; the model itself uses flat caps).
 
 Usage:
     python scripts/calibrate_ltv_by_age.py path/to/atlanta_hmda_2019.csv
@@ -18,8 +10,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-# HMDA's bucketed age field; midpoints used as the regression's continuous
-# age predictor. "8888" means not applicable/unknown and is dropped.
+# midpoints of HMDA's age buckets; "8888" (unknown) is dropped
 AGE_MIDPOINTS = {
     "<25": 22.0,
     "25-34": 29.5,

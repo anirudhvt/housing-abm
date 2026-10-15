@@ -1,7 +1,6 @@
-# 2-10 units, rental-yield focused (delta = 0.3)
-# rent stickiness on lease renewal
-# cash purchase if wealth > 2x price
-from housing_abm.equations.expenditure import price_appreciation_expectation
+"""Small landlord: rental-yield focused (delta = 0.3), sticky rents, and buys
+in cash when wealth exceeds twice the price."""
+
 from housing_abm.equations.investor_probs import p_buy_investor, p_sell_investor
 from housing_abm.equations.investor_yield import (
     effective_yield_sell,
@@ -22,41 +21,36 @@ from .base import HouseholdAgent
 class SmallLandlord(HouseholdAgent):
 
     WEALTH_KEY = "small_landlord"
-    LOAN_TYPE = "investor_dscr"  # new loan terms
-    DELTA = 0.3  # more risk averse than institutional investors
+    LOAN_TYPE = "investor_dscr"
+    DELTA = 0.3  # weight on capital gain; lower than institutional
+
+    @property
+    def delta(self) -> float:
+        """EQ 9/12 weight on capital gain; config delta_small_landlord overrides DELTA."""
+        return self.model.params["investor_yield_eq9_eq12"].get("delta_small_landlord", self.DELTA)
 
     def __init__(self, model, income, age, tract_id):
         super().__init__(model, income, age, tract_id)
-        self.properties = []  # housingunit owned
-        self.house_to_sell = None  # unused, kept for ownership market
+        self.properties = []
+        self.house_to_sell = None  # unused; the ownership market expects it
 
     def step(self):
-        # EQ 9: Expected yield, EQ 10 p_buy
-        # EQ 11: rent with stickiness, EQ 12/13 sell decision
-        # EQ 18: down_payment_investor(agent_type = 'small landlord')
+        self.refresh_desired_balance()
 
-        self.refresh_desired_balance()  # reset using EQ 1
-
+        # net rental income enters EQ 2 as a negative housing cost
         net_rental_cash_flow = self._collect_rent_and_pay_mortgages()
-        # negative housing cost folds into EQ 2 similar to a rent/mortgage payment
-        self.apply_consumption(
-            housing_cost=-net_rental_cash_flow
-        )  # negative cash flow is a housing cost, positive cash flow is a housing benefit
+        self.apply_consumption(housing_cost=-net_rental_cash_flow)
 
-        self._reprice_vacant_units()  # price reduction mechanic
-        # buy or sell any units
+        self._reprice_vacant_units()
         self._evaluate_sell_decision()
         self._evaluate_buy_decision()
 
     def _collect_rent_and_pay_mortgages(self) -> float:
-        """sum rent across tenant properties minus mortgage payments
-        vacant units still carry mortgage"""
+        """Rent from occupied units minus mortgages on all units."""
         total_rent = sum(
             u.rent or 0.0 for u in self.properties if u.tenant is not None
-        )  # non vacant units generate rent
-        total_mortgage = sum(
-            u.mortgage_payment or 0.0 for u in self.properties
-        )  # pay for all properties, vacant or not
+        )
+        total_mortgage = sum(u.mortgage_payment or 0.0 for u in self.properties)
         return total_rent - total_mortgage
 
     def _reprice_vacant_units(self):
@@ -67,11 +61,7 @@ class SmallLandlord(HouseholdAgent):
                 tract = self.model.tracts[unit.tract_id]
                 unit.rent = small_landlord_rent(
                     r_bar_tract=tract.rent_per_quality * unit.quality,
-                    # EQ11's f_bar is days on the *rental* market, not the
-                    # ownership market -- the reference is explicit about this
-                    # ("f_bar is the number of days in the rental market,
-                    # rather than in the ownership market"). This previously
-                    # passed avg_days_on_market().
+                    # EQ 11's f_bar is time on the rental market, not the sale market
                     f_bar_tract=tract.avg_days_vacant(),
                     alpha=cfg["alpha"],
                     beta=cfg["beta"],
@@ -83,26 +73,23 @@ class SmallLandlord(HouseholdAgent):
                 )
 
     def _evaluate_sell_decision(self):
-        """EQ 12/13, sell probability based on effective yield"""
+        """EQ 12/13: sell vacant units based on effective yield."""
         yield_cfg = self.model.params["investor_yield_eq9_eq12"]
         prob_cfg = self.model.params["investor_probs_eq10_eq13"]
-        for unit in list(self.properties):  # check for each property
-            if unit.on_sale_market:  # already listed, don't relist
+        for unit in list(self.properties):
+            if unit.on_sale_market:
                 continue
             if unit.tenant is not None:
-                # we don't sell occupied units until lease ends
-                continue
+                continue  # only sell once the lease ends
             tract = self.model.tracts[unit.tract_id]
-            current_value = tract.avg_sold_price(
-                unit.quality
-            )  # current market value of the unit
+            current_value = tract.avg_sold_price(unit.quality)
             equity = current_value - unit.mortgage_principal
             g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_household"])
-            
+
             psi = effective_yield_sell(
                 price=current_value,
                 equity=equity,
-                delta=self.DELTA,
+                delta=self.delta,
                 g=g,
                 kappa=yield_cfg["kappa"],
                 r_bar=tract.gross_rental_yield(),
@@ -110,29 +97,23 @@ class SmallLandlord(HouseholdAgent):
                 policy_cost=compute_policy_cost(self.model, self),
             )
             prob_sell = p_sell_investor(psi, beta=prob_cfg["beta_small_landlord"])
-            if self.model.random_gen.random() < prob_sell:  # chooses to sell
+            if self.model.random_gen.random() < prob_sell:
                 asking_cfg = self.model.params["asking_price_eq7"]
-                unit.price = (
-                    asking_price(  # generates price from metrics on the tract level
-                        p_bar_tract=current_value,
-                        f_bar_tract=tract.avg_days_on_market(),
-                        alpha=asking_cfg["alpha"],
-                        beta=asking_cfg["beta"],
-                        zeta=asking_cfg["zeta"],
-                        epsilon_std=asking_cfg["epsilon_std"],
-                        rng=self.model.random_gen,
-                    )
+                unit.price = asking_price(
+                    p_bar_tract=current_value,
+                    f_bar_tract=tract.avg_days_on_market(),
+                    alpha=asking_cfg["alpha"],
+                    beta=asking_cfg["beta"],
+                    zeta=asking_cfg["zeta"],
+                    epsilon_std=asking_cfg["epsilon_std"],
+                    rng=self.model.random_gen,
                 )
-                unit.price = max(
-                    unit.price, unit.mortgage_principal
-                )  # see repeat_buyer.py comment
-                unit.on_rental_market = (
-                    False  # can't be biddable in both markets at one time
-                )
+                unit.price = max(unit.price, unit.mortgage_principal)
+                unit.on_rental_market = False  # can't be in both markets
                 self.model.list_for_sale(unit, seller=self)
 
     def _evaluate_buy_decision(self):
-        """EQ 9/10; expected yield -> purchase probability -> bid on ownership market"""
+        """EQ 9/10: expected yield -> purchase probability -> ownership bid."""
         yield_cfg = self.model.params["investor_yield_eq9_eq12"]
         prob_cfg = self.model.params["investor_probs_eq10_eq13"]
         down_cfg = self.model.params["downpayment_eq18"]["small_landlord"]
@@ -144,28 +125,24 @@ class SmallLandlord(HouseholdAgent):
         target_price = tract.price_per_quality
         g = tract.appreciation_g(alpha=self.model.params["appreciation_eq4"]["alpha_household"])
 
-        down_payment, is_cash = (
-            down_payment_investor(  # follows cash rule for buying if has enough money
-                price=target_price,
-                wealth=self.bank_balance,
-                agent_type="small_landlord",
-                mu=down_cfg["mu"],
-                sigma=down_cfg["sigma"],
-                p_cash=0.0,
-                d_minimum_pct=down_cfg["d_minimum_pct"],
-                rng=self.model.random_gen,
-            )
+        down_payment, is_cash = down_payment_investor(
+            price=target_price,
+            wealth=self.bank_balance,
+            agent_type="small_landlord",
+            mu=down_cfg["mu"],
+            sigma=down_cfg["sigma"],
+            p_cash=0.0,
+            d_minimum_pct=down_cfg["d_minimum_pct"],
+            rng=self.model.random_gen,
         )
 
-        down_payment = min(down_payment, target_price)  # can't pay more than the price
-        # a purchase tax raises the cash required for the same asset (see
-        # acquisition_price_multiplier); the return still accrues on market value
+        down_payment = min(down_payment, target_price)
+        # purchase tax raises the cash outlay; returns still accrue on market value
         tax_multiplier = acquisition_price_multiplier(self.model, self)
         cash_outlay = down_payment + (tax_multiplier - 1.0) * target_price
         if self.bank_balance < cash_outlay:
-            return  # can't afford to purchase this month
+            return
 
-        # evaluate if they can get the loan
         proposed_loan = 0.0 if is_cash else target_price - down_payment
         monthly_mortgage = (
             0.0
@@ -176,7 +153,7 @@ class SmallLandlord(HouseholdAgent):
         )
 
         if not is_cash:
-            passes = passes_investor_dscr(  # bank conditions on loans
+            passes = passes_investor_dscr(
                 bank_balance=self.bank_balance,
                 expected_annual_rent_yield=tract.gross_rental_yield(),
                 xi_icr=dscr_cfg["xi_icr"],
@@ -184,13 +161,13 @@ class SmallLandlord(HouseholdAgent):
                 proposed_loan=proposed_loan,
                 chi_max_ltv=mort_cfg["max_ltv"],
             )
-            if not passes:  # bank doesn't allow loan
+            if not passes:
                 return
 
         omega = expected_yield_buy(
             price=target_price,
             down_payment=cash_outlay,
-            delta=self.DELTA,
+            delta=self.delta,
             g=g,
             kappa=yield_cfg["kappa"],
             r_bar=tract.gross_rental_yield(),
@@ -200,9 +177,7 @@ class SmallLandlord(HouseholdAgent):
 
         prob_buy = p_buy_investor(omega, beta=prob_cfg["beta_small_landlord"])
 
-        if (
-            self.model.random_gen.random() < prob_buy
-        ):  # chooses to buy, bid on ownership market
+        if self.model.random_gen.random() < prob_buy:
             self.model.queue_ownership_bid(
                 self,
                 max_price=target_price,

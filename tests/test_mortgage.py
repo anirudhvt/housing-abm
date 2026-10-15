@@ -219,9 +219,7 @@ def test_investor_down_payment_institutional_respects_p_cash(
     assert is_cash_never is False
 
 
-# estimate_floor_share_and_fit -- the calibration helper behind
-# scripts/calibrate_downpayment_eq17.py, previously written but never
-# exercised by any test or caller
+# estimate_floor_share_and_fit (calibration helper used by scripts/)
 
 def test_estimate_floor_share_and_fit_reports_all_at_floor_share():
     pcts = np.array([0.02, 0.03, 0.20, 0.25, 0.30])

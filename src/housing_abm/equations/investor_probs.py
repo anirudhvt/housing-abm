@@ -1,17 +1,12 @@
-"""Eq 10 (Investor/landlord purchase probability) and EQ 13 (investor/landlord sell probability
-
-beta: beta_small_landlord and beta_institutional matched against purchase share (atlanta)
-
-"""
+"""EQ 10 (investor purchase probability) and EQ 13 (investor sell probability).
+beta is set separately for small landlords and institutional investors."""
 
 from .buy_rent import sigmoid
 
 
 def p_buy_investor(omega: float, beta: float, policy_blocked: bool = False) -> float:
-    """EQ 10: P(buy) = sigmoid(beta * omega)^(1/12)
-    policy_blocked: True to force P(0) for hard policies: waiting period,
-    ownership cap, geographic restriction - BEFORE equatoin runs
-    omega: expected yield (EQ 9)"""
+    """EQ 10: P(buy) = sigmoid(beta * omega)^(1/12), omega from EQ 9.
+    policy_blocked forces P = 0."""
 
     if policy_blocked:
         return 0.0
@@ -19,9 +14,8 @@ def p_buy_investor(omega: float, beta: float, policy_blocked: bool = False) -> f
 
 
 def p_sell_investor(psi: float, beta: float, forced_divesture: bool = False) -> float:
-    """EQ 13: P(sell) = sigmoid(beta * psi)^(1/12)
-    forced_divesture: True for ownership caps to force P = 1
-    psi: effective yield (EQ 12)"""
+    """EQ 13: P(sell) = 1 - sigmoid(beta * psi)^(1/12), psi from EQ 12.
+    forced_divesture forces P = 1."""
 
     if forced_divesture:
         return 1.0

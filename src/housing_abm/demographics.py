@@ -1,4 +1,4 @@
-"""demographics: birth, mortality, aging, inheritance"""
+"""Demographics: births, mortality, aging and inheritance."""
 
 import numpy as np
 
@@ -8,7 +8,7 @@ from housing_abm.agents.repeat_buyer import RepeatBuyer
 from housing_abm.agents.small_landlord import SmallLandlord
 from housing_abm.equations.investor_propensity import landlord_birth_probability
 
-# don't include investor, modeleded as a fund/firm, not a mortal household - doesn't die
+# institutional investors are firms, not mortal households
 HOUSEHOLD_TYPES = (Renter, FirstTimeBuyer, RepeatBuyer, SmallLandlord)
 
 
@@ -23,19 +23,8 @@ def annual_death_probability(age, cfg: dict):
 
 def stationary_age_distribution(cfg: dict, entry_lo: int, entry_hi: int,
                                 max_age: int = 140):
-    """Age distribution of a population in demographic steady state.
-
-    Drawing initial ages uniformly over [22, 65) -- as the model previously
-    did -- seeds a population with no one near the mortality midpoint, so
-    deaths stay near zero for several decades while births continue. The
-    population then grows, hits the hazard wall together as one cohort, and
-    collapses. That transient is longer than the whole simulation, so no
-    spin-up length reaches a steady state and every reported outcome is
-    measured mid-drift.
-
-    Sampling from the stationary distribution instead starts the model where
-    the spin-up was supposed to end. Returns (ages, probabilities).
-    """
+    """Steady-state age distribution implied by the entry ages and mortality
+    hazard, so the initial population doesn't drift. Returns (ages, probs)."""
     ages = np.arange(0, max_age + 1)
     hazard = annual_death_probability(ages, cfg)
     survival = np.concatenate([[1.0], np.cumprod(1.0 - hazard)])
@@ -51,37 +40,16 @@ def sample_stationary_ages(rng, n: int, cfg: dict, entry_lo: int, entry_hi: int)
     return rng.choice(ages, size=n, p=probs)
 
 
-def implied_death_rate(cfg: dict, entry_lo: int, entry_hi: int) -> float:
-    """Annual death rate implied by the hazard, i.e. 1 / mean household life.
-
-    A stable population needs this to equal the birth rate; Baptista et al.
-    scale the mortality pdf by a constant to enforce exactly that.
-    """
-    _, probs = stationary_age_distribution(cfg, entry_lo, entry_hi)
-    ages = np.arange(0, 141)
-    survival_mass = 0.0
-    hazard = annual_death_probability(ages, cfg)
-    survival = np.concatenate([[1.0], np.cumprod(1.0 - hazard)])
-    for a0 in range(entry_lo, entry_hi):
-        survival_mass += (survival[a0:141] / survival[a0]).sum()
-    mean_lifetime = survival_mass / (entry_hi - entry_lo)
-    return 1.0 / mean_lifetime
-
-
 def monthly_death_probability(age: float, cfg: dict) -> float:
-    """Logistic age-dependent function, scaled by a calibration constant."""
-    midpoint = cfg["age_midpoint"]
-    scale = cfg["age_scale"]
-    base = cfg["base_annual_rate"]
-    annual_rate = base + (1 - base) / (1 + np.exp(-(age - midpoint) / scale))
-    annual_rate = min(annual_rate * cfg["mortality_scale"], 0.99)  # can't be too high
-    return 1 - (1 - annual_rate) ** (1.0 / 12.0)  # convert to monthly
+    """annual_death_probability converted to a monthly hazard."""
+    annual_rate = annual_death_probability(age, cfg)
+    return 1 - (1 - annual_rate) ** (1.0 / 12.0)
 
 
 def process_aging_and_births(model):
-    """Age every household by a year every 12 steps
-    draw ner births as poisson process on annual birth rate"""
-    if model.current_month % 12 == 0:  # year has passed
+    """Age households yearly; add Poisson births plus one in-migrant per
+    rent-burden exit, each assigned the landlord gene by SCF propensity."""
+    if model.current_month % 12 == 0:
         for agent in list(model.agents):
             if isinstance(agent, HOUSEHOLD_TYPES):
                 agent.age += 1
@@ -91,12 +59,7 @@ def process_aging_and_births(model):
     expected_births = n_households * cfg["birth_rate_annual"] / 12.0
     n_births = model.rng_demography.poisson(expected_births)
 
-    # Households pushed out by rent burden leave the metro permanently. Left
-    # uncompensated that is a pure population sink of ~0.4%/yr on top of
-    # mortality, which tips the birth/death balance negative and makes the
-    # population -- and every rate computed against it -- drift downward for
-    # the whole run. Real metros replace out-migrants with in-migrants, so
-    # they are replaced one-for-one here.
+    # replace rent-burden exits one-for-one so the population doesn't drift down
     n_replacements = model.households_displaced_pending
     model.households_displaced_pending = 0
 
@@ -129,7 +92,7 @@ def process_aging_and_births(model):
 
 
 def process_deaths(model):
-    """kill households based on age, transfer wealth to random living heir"""
+    """Draw deaths by age and pass each estate to a random living heir."""
     cfg = model.params["demographics"]["mortality"]
     households = [a for a in model.agents if isinstance(a, HOUSEHOLD_TYPES)]
     if len(households) < 2:
@@ -139,24 +102,21 @@ def process_deaths(model):
         a
         for a in households
         if model.rng_demography.random() < monthly_death_probability(a.age, cfg)
-    ]  #
-    # randomly select deceased people
+    ]
 
     for agent in deceased:
         heirs = [h for h in households if h is not agent and h not in deceased]
-        if not heirs:  # no one to take money
+        if not heirs:
             _liquidate_estate(model, agent)
             agent.remove()
             continue
-        # transfer to new heir
         heir = heirs[model.rng_demography.integers(0, len(heirs))]
         _transfer_estate(model, agent, heir)
         agent.remove()
 
 
 def _vacate_and_delist(model, agent):
-    """Pull deceased out of bid queues to prevent posthumous matching"""
-    # remove from rental bid and ownership bid queues
+    """Pull the deceased out of both bid queues."""
     if agent in model._rental_bid_queue:
         model._rental_bid_queue.remove(agent)
     model._ownership_bid_queue[:] = [
@@ -165,19 +125,18 @@ def _vacate_and_delist(model, agent):
 
 
 def _transfer_estate(model, deceased, heir):
-    """heir gets financial wealth and housing
-    renting tenancy terminated, mortgages written off"""
+    """Heir gets cash and housing; mortgages are written off and tenancies end."""
     _vacate_and_delist(model, deceased)
     heir.bank_balance += deceased.bank_balance
 
     # owner-occupied home
     if deceased.house is not None and deceased.status == "owning":
         unit = deceased.house
-        unit.mortgage_principal = 0.0  # written off
+        unit.mortgage_principal = 0.0
         unit.mortgage_payment = 0.0
-        unit.owner = heir  # transfer to new heir
+        unit.owner = heir
         if getattr(heir, "properties", None) is not None:
-            # heir is a landlord: treat the inherited home as another rental property
+            # landlord heir: becomes another rental
             heir.properties.append(unit)
             unit.tenant = None
             unit.on_rental_market = True
@@ -185,13 +144,12 @@ def _transfer_estate(model, deceased, heir):
                 unit.rent = model.tracts[unit.tract_id].rent_per_quality * unit.quality
             model.add_rental_unit(unit)
         elif heir.house is None and isinstance(heir, (FirstTimeBuyer, RepeatBuyer)):
-            # heir is currently unhoused: they move in directly
+            # unhoused heir moves in
             heir.house = unit
             heir.status = "owning"
             heir.owned_since_month = model.current_month
         else:
-            # heir already has a home of their own: list the inherited house for
-            # sale rather than letting it vanish from the housing stock
+            # heir already housed: sell the inherited home
             model.list_for_sale(unit, seller=heir)
 
     # renting tenancy ends
@@ -199,52 +157,43 @@ def _transfer_estate(model, deceased, heir):
         model.end_tenancy(deceased.house)
 
     # landlord's rental portfolio
-    if getattr(deceased, "properties", None):  # deceased is a landlord
-        for unit in list(deceased.properties):  # transfer all properties to heir
+    if getattr(deceased, "properties", None):
+        for unit in list(deceased.properties):
             unit.owner = heir
             if getattr(heir, "properties", None) is not None:
                 heir.properties.append(unit)
             else:
-                # heir isn't set up to be a landlord: liquidate via the normal
-                # resale channel instead of just handing them a rental unit
+                # non-landlord heir: evict and sell
                 if unit.tenant is not None:
-                    # evict existing tenant before selling unit
                     _evict_tenant(model, unit)
                 unit.on_rental_market = False
                 model.drop_rental_unit(unit)
                 model.list_for_sale(unit, seller=heir)
         deceased.properties.clear()
 
-    # any pending listing (repeat buyer mid-sale) transfers its payout too
+    # a pending resale's payout goes to the heir too
     house_to_sell = getattr(deceased, "house_to_sell", None)
     if house_to_sell is not None and house_to_sell in model._resale_sellers:
         model._resale_sellers[house_to_sell] = heir
 
 
 def _evict_tenant(model, unit):
-    """terminate existing tenancy on a unit about to change hands"""
+    """End a tenancy on a unit about to change hands; tenant re-enters the market."""
     tenant = unit.tenant
     unit.tenant = None
     tenant.house = None
     tenant.status = "social_housing"
-    model.queue_housing_decision(tenant)  # back into the market next step
+    model.queue_housing_decision(tenant)
 
 
 def _liquidate_estate(model, agent):
-    """No heir available, pull estate out of circulation.
-
-    These units leave the housing stock entirely, so they must also leave the
-    stock registry -- otherwise construction keeps counting demolished homes
-    against its house-to-household target and under-builds forever.
-    """
+    """No heir: remove the estate's units from the housing stock."""
     _vacate_and_delist(model, agent)
     if agent.house is not None:
         if agent.status == "owning":
             _withdraw_unit(model, agent.house)
         else:
-            # the deceased was a tenant: the unit belongs to someone else, so
-            # release the tenancy rather than demolishing another agent's
-            # property (which also left stale tenant pointers behind)
+            # deceased was a tenant: just release the tenancy
             model.end_tenancy(agent.house)
     for unit in getattr(agent, "properties", None) or []:
         if unit.tenant is not None:

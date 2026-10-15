@@ -8,9 +8,7 @@ from housing_abm.equations.rental_pricing import (
 
 
 def test_small_landlord_rent_sticky_when_not_repriced(never_trigger_rng):
-    # reprice_prob check uses rng.random() >= reprice_prob to decide stickiness;
-    # never_trigger_rng always returns 1.0, so it should always stay sticky
-    # whenever previous_rent is given (1.0 >= any reprice_prob < 1.0)
+    # never_trigger_rng returns 1.0, which is >= any reprice_prob < 1, so rent stays sticky
     rent = small_landlord_rent(
         r_bar_tract=1500,
         f_bar_tract=20,

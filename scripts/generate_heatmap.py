@@ -1,15 +1,5 @@
-"""Sensitivity heatmap: policy effect by swept parameter value.
-
-Reads the CSV written by run_sensitivity.py, which now carries the full paired
-summary per cell (effect, interval, p-value), so the heatmap can mark which
-cells are actually distinguishable from zero rather than colouring point
-estimates that may be noise. Cells whose 95% interval excludes zero are
-outlined; the rest are drawn flat.
-
-Built on matplotlib alone so it does not depend on seaborn being installed,
-and it honours --input/--output rather than hard-coding paths as the previous
-version did while the README passed them.
-"""
+"""Sensitivity heatmap of policy effect by swept parameter value, from a
+run_sensitivity.py CSV. Cells whose 95% interval excludes zero are outlined."""
 
 import argparse
 import os

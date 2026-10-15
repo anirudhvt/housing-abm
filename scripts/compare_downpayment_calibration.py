@@ -1,23 +1,6 @@
-"""Paired comparison: current downpayment_eq17 config vs. a data-fit
-calibration of it. See docs/methodology.md Section 10/10a/10b for the
-derivation history:
-
-- 10/10a: a first pass fit against HMDA, using loan_type (FHA vs.
-  conventional) as a proxy for first-time vs. repeat buyer, since HMDA
-  carries no direct first-time-buyer flag.
-- 10b: the values below, fit against Fannie Mae's Single-Family Loan
-  Performance Data (Atlanta MSA, 2019 Q1 purchase-money loans), which
-  carries a genuine First Time Home Buyer Indicator reported at
-  origination -- ground truth, not a proxy. This changed the first-time
-  buyer numbers in a way the proxy got backwards (see 10b): real
-  first-time buyers cluster at the down-payment floor *less* than the
-  model assumes, not more.
-
-Same CRN design as run_all_policies.py: one shared spin-up per seed, forked
-into two arms that differ only in downpayment_eq17 from the fork point
-onward. This treats "adopt the data-fit down-payment calibration" as a
-policy switched on at the end of spin-up, which is what makes the two arms
-comparable seed-by-seed rather than two independent, decorrelated runs.
+"""Paired comparison of the current downpayment_eq17 config against the Fannie
+Mae fit (docs/methodology.md Section 10b). Each seed's spun-up model is forked
+into two arms that differ only in downpayment_eq17.
 """
 
 import argparse
@@ -39,10 +22,8 @@ from housing_abm.experiment import (  # noqa: E402
 )
 from housing_abm.metrics import run_window, window_means  # noqa: E402
 
-# Ground-truth fit from calibrate_downpayment_eq17_fnma.py against Fannie
-# Mae's Single-Family Loan Performance Data, Atlanta MSA (12060), 2019 Q1
-# purchase-money owner-occupied loans, split on the real First Time Home
-# Buyer Indicator (n=1,718 FTB / n=1,777 repeat).
+# from calibrate_downpayment_eq17_fnma.py: Atlanta MSA, 2019 Q1 owner-occupied
+# purchases (n=1,718 first-time / 1,777 repeat)
 ADOPTED_DOWNPAYMENT_EQ17 = {
     "first_time_buyer": {
         "d_minimum_pct": 0.035,

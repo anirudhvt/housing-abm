@@ -1,11 +1,4 @@
-"""Tests for the SCF-grounded small-landlord selection mechanism.
-
-See docs/methodology.md Section 11/12: replaces a disconnected, hand-picked
-"landlords skew higher-income" lognormal with landlord incomes drawn from
-the same household distribution as everyone else, selected without
-replacement weighted by the real income-percentile ownership-propensity
-curve fit from the 2022 SCF.
-"""
+"""Tests for SCF income-percentile weighted small-landlord selection."""
 
 import numpy as np
 import pytest
@@ -67,9 +60,7 @@ def test_sample_landlord_incomes_handles_pool_smaller_than_requested():
 
 
 def test_real_propensity_curve_skews_landlord_incomes_above_flat_selection():
-    # a monotonically increasing propensity curve should pull the selected
-    # sample's mean income above what uniform (flat-weight) selection from
-    # the same pool would give -- this is the entire point of the mechanism
+    # an increasing propensity curve should select higher incomes than flat weights
     rng_real = np.random.default_rng(42)
     rng_flat = np.random.default_rng(42)
     real_incomes = sample_landlord_incomes(rng_real, n_landlords=200, pool_size=2000,

@@ -1,11 +1,5 @@
-"""Tests for wiring simulation.use_external_appreciation_data to the
-already-downloaded ZHVI/ZORI CSVs.
-
-Guards against the bug this pins the fix for: the config flag existed and
-was read nowhere -- model.py hardcoded external_g_series and
-external_rent_growth_series to None regardless of its value, so the full
-2015-2026 Zillow history checked into the repo was silently ignored.
-"""
+"""Tests that simulation.use_external_appreciation_data actually loads the
+ZHVI/ZORI CSVs into the tract."""
 
 import warnings
 
@@ -84,11 +78,6 @@ def test_flag_on_with_missing_file_falls_back_to_none_with_warning(tmp_path):
 
 
 def test_default_csv_paths_point_at_the_repo_root_files():
-    # atlanta_zillow_zhvi.csv / atlanta_zillow_zori.csv are already checked
-    # into the repo; the default paths should resolve to them without
-    # requiring zhvi_csv_path/zori_csv_path to be set explicitly.
+    # flag is off by default, so the model builds without loading anything
     m = AtlantaHousingModel(config_path=BASE_CONFIG, n_households=20, seed=1)
-    # flag is off by default in baseline_params.yaml, so confirm the model
-    # still builds; the loading path itself is exercised by
-    # test_flag_on_loads_the_configured_csvs above with an explicit path.
     assert m.tracts["tract_001"].external_g_series is None

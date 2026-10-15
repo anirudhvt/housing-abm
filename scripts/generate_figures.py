@@ -1,12 +1,8 @@
-"""
-Generate Figure 4 (policy comparison bar chart) and
-Figure 5 (trade-off scatter plot) from policy comparison CSVs.
+"""Generate the policy comparison figures (4, 4b, 5 and the first-time-buyer
+share chart) from results/.
 
-Usage — from your repo root:
-    python scripts/make_figures.py --results results/ --output figures/
-
-Or with the test data:
-    python make_figures.py --results /tmp/test_results/ --output /tmp/
+Usage:
+    python scripts/generate_figures.py --results results/ --output figures/
 """
 
 import argparse
@@ -58,14 +54,7 @@ METRICS = {
 # ── Data loading ─────────────────────────────────────────────────────────────
 
 def _summarise(policy_label, metric, baseline_values, policy_values):
-    """One row of the figure summary, using the shared paired estimator.
-
-    This defers to housing_abm.experiment.paired_summary so the intervals
-    plotted are exactly the ones the runner reports -- t critical values with
-    the right degrees of freedom, and sd with ddof=1. The previous version
-    used 1.96 with a population standard deviation, which understates the
-    interval at these seed counts.
-    """
+    """One summary row, using the same paired estimator as the runners."""
     summary = paired_summary(baseline_values, policy_values, n_boot=5000)
     if summary is None:
         return None
@@ -85,12 +74,8 @@ def _summarise(policy_label, metric, baseline_values, policy_values):
 
 
 def load_policy_results(results_dir: str) -> pd.DataFrame:
-    """Paired differences per policy and metric.
-
-    Prefers all_policies_raw.csv, where every policy shares one baseline arm
-    from the same spun-up seeds. Falls back to the older layout of one CSV per
-    policy, each with its own baseline arm.
-    """
+    """Paired differences per policy and metric, from all_policies_raw.csv or,
+    failing that, one CSV per policy."""
     combined = os.path.join(results_dir, "all_policies_raw.csv")
     rows = []
 
@@ -366,14 +351,7 @@ def make_figure4b(summary: pd.DataFrame, output_dir: str):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def make_figure_ftb_share(summary: pd.DataFrame, output_dir: str):
-    """Policy effect on the first-time-buyer share of purchases.
-
-    This is the flow the policies act on directly -- who wins the bidding on a
-    given listing -- rather than the homeownership stock, which only moves as
-    fast as that flow accumulates. It is also the better-powered outcome: it is
-    close to white noise month to month, so averaging the measurement window
-    buys a much larger reduction in standard error than it does for the stocks.
-    """
+    """Policy effect on the first-time-buyer share of purchases."""
     data = summary[summary["metric"] == "ftb_purchase_share"].copy()
     if data.empty:
         print("  no ftb_purchase_share rows — skipping")

@@ -1,4 +1,4 @@
-"""EQ 6: sell probability, EQ 7: asking price, EQ 8: price reduction"""
+"""EQ 6 (sell probability), EQ 7 (asking price), EQ 8 (price reduction)."""
 
 import numpy as np
 
@@ -14,21 +14,12 @@ def p_sell(
     i_mortgage: float | None = None,
     gamma: float = 0.0,
 ) -> float:
-    """EQ 6: P(sell) = 1/12 * max(1/tenure years (1 + alpha(n_h_avg - n_h)
-    +beta(i_avg - i_current)),0)
-    adapted term: 'golden handcuffs' lock-in effect: gamma(i_current - i_mortgage)
-    NOT in original paper, pass i_mortgage = None to disable
-
-    tenure_years: long term selling probability (once every _ years)
-    n_h/n_h_avg: number of homes per capita on the market/moving average
-    i_current/i_avg: current and average interest rates
-    i_mortgage: current mortgage interest rate (if applicable)
-    """
+    """EQ 6: P(sell) = 1/12 * max((1 + alpha(n_h_avg - n_h) + beta(i_avg - i_current))
+    / tenure_years, 0), with an added rate lock-in term gamma(i_current - i_mortgage)
+    that is not in the paper (pass i_mortgage=None to disable)."""
     base = 1 + alpha * (n_h_avg - n_h) + beta * (i_avg - i_current)
     if i_mortgage is not None:
-        base -= gamma * (
-            i_current - i_mortgage
-        )  # having a good mortgage currently reduces chance of buying
+        base -= gamma * (i_current - i_mortgage)
     return 1 / 12 * max((1 / tenure_years) * base, 0.0)
 
 
@@ -41,13 +32,8 @@ def asking_price(
     epsilon_std: float,
     rng: np.random.Generator,
 ) -> float:
-    """EQ 7: ln(p_s) = alpha + ln(p_bar) - beta*ln(zeta*(1+f_bar))+epsilon
-    p_bar_tract, f_bar_tract computed at CENSUS TRACT level, instead of area wide
-
-    p_bar_tract: average sold-price of homes of this quality
-    f_bar_tract: average number of days on market for all house qualities
-    """
-
+    """EQ 7: ln(p_s) = alpha + ln(p_bar) - beta*ln(zeta*(1+f_bar)) + epsilon,
+    with p_bar and f_bar measured per census tract."""
     epsilon = rng.normal(0, epsilon_std)
     ln_ps = (
         alpha + np.log(p_bar_tract) - beta * np.log(zeta * (1 + f_bar_tract)) + epsilon
@@ -62,13 +48,10 @@ def price_reduction(
     rng: np.random.Generator,
     vacancy_tax_multiplier: float = 1.0,
 ) -> float:
-    """EQ 8: chance of price reduction for each time step
-    vacancy_tax_multiplier > 1: increases reduction probability for investor held units
-    """
-
+    """EQ 8: cut the price with probability reduction_prob (scaled up by
+    vacancy_tax_multiplier for taxed investor listings)."""
     prob = min(reduction_prob * vacancy_tax_multiplier, 1.0)
-    if rng.random() < prob:  # chooses to reduce price
-        # have to force epsilon <= 0
+    if rng.random() < prob:
         epsilon = -abs(rng.normal(0, epsilon_std))
         return max(current_price * np.exp(epsilon), 0)
     return current_price

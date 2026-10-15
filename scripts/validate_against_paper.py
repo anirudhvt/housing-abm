@@ -1,18 +1,5 @@
-"""Baseline validation against Atlanta plausibility targets.
-
-Two changes from the original version matter for interpreting the numbers.
-
-First, validation now runs under the *same* spin-up and window as the policy
-experiments and averages over the window. The original script ran a single
-seed with no spin-up at all and read the final month, while the policy runs
-used a 600-month spin-up: the validation table therefore described a different
-model state than the one the policy results came from, which is why the
-reported homeownership rate (0.52) bore no relation to what the policy runs
-actually produced (~0.24).
-
-Second, it runs multiple seeds and reports an interval, so "in range" is a
-claim about the model rather than about one draw.
-"""
+"""Validate the baseline against Atlanta plausibility targets over multiple
+seeds, using the same spin-up and window as the policy experiments."""
 
 import argparse
 import os
@@ -30,32 +17,8 @@ from housing_abm.metrics import run_window, window_means  # noqa: E402
 
 
 def _appreciation_target():
-    """Plausible band for the model's appreciation rate.
-
-    The model has no inflation anywhere: incomes are fixed in level terms, and
-    there is no nominal trend in rents or construction costs. It therefore
-    produces a *real* appreciation rate, while Case-Shiller ATXRSA is a
-    nominal index. Validating the model's output against the nominal
-    2020-2023 window -- a historic boom averaging 11.7%/yr -- compares two
-    different quantities and guarantees a failure that no calibration could
-    fix. (That comparison is why the original validation table showed
-    appreciation pinned at its -0.030 floor and "out of range".)
-
-    The band used here is long-run *real* US house price growth, which is the
-    like-for-like comparison for a stationary model with no price trend built
-    in. The nominal Case-Shiller figures are still printed for context.
-
-    Checked against `price_cagr` (the log-OLS trend of the tract's smoothed
-    price series), not `annual_appreciation_g` (the mean over months of EQ4's
-    ratio-based trailing growth). Both are meaningful, but they measure
-    different things: EQ4's g is the behavioural signal agents act on, and on
-    a volatile mean-reverting series its monthly mean is a biased estimator
-    of the trend -- measured at +3.75%/yr against an actual +0.99%/yr CAGR,
-    overstating in all 8 seeds tested, including two where the price level
-    fell over the window while g still read ~+3%/yr. See
-    housing_abm.metrics.price_trend_cagr. A trend band needs a trend
-    estimator; EQ4 itself is unchanged and still reported below.
-    """
+    """Band for price_cagr: long-run real US house price growth, since the
+    model has no inflation. Nominal Case-Shiller is shown for context only."""
     note = "long-run real US house price growth (Shiller); model has no inflation"
     try:
         cs = pd.read_csv("atlanta_case_shiller.csv")
@@ -73,10 +36,6 @@ TARGETS = [
         "homeownership_rate",
         0.48,
         0.60,
-        # The previous band, 0.55-0.75, was a US *national* range. Section 3.A
-        # of the paper reports the Atlanta metro figure from its own ACS pull:
-        # an owner-occupancy rate of 52.9%. That is the right target for a
-        # model calibrated to Atlanta.
         "ACS 5-year 2019 owner-occupancy for the seven Atlanta metro counties "
         "is 52.9%; band allows for small-ABM variation",
     ),

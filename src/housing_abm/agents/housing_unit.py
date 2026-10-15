@@ -1,4 +1,4 @@
-"""Passive housing unit agent - holds state"""
+"""Passive housing unit agent; holds state only."""
 
 from mesa import Agent
 
@@ -8,14 +8,14 @@ class HousingUnit(Agent):
         super().__init__(model)
         self.tract_id = tract_id
         self.quality = quality
-        self.owner = None  # owning agent
-        self.tenant = None  # renting agent, if rented
-        self.price = None  # current sale price, if listed
-        self.rent = None  # current rent if listed
+        self.owner = None
+        self.tenant = None
+        self.price = None
+        self.rent = None
+        # both counters advance once per step, so they count months
         self.days_on_market = 0
         self.day_vacant = 0
-        # months of frictional void remaining before the unit can be re-let
-        # (cleaning, repairs, marketing between tenancies)
+        # months before a vacated unit can be re-let
         self.void_months_remaining = 0
         self.on_sale_market = False
         self.on_rental_market = False
